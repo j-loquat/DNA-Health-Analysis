@@ -1,0 +1,19 @@
+{
+  "apoe_haplotype_map": {
+    "TT|CC": "e3/e3",
+    "TT|CT": "e2/e3",
+    "TT|TT": "e2/e2",
+    "CT|CC": "e3/e4",
+    "CT|CT": "e2/e4",
+    "CC|CC": "e4/e4"
+  },
+  "cyp2c9_star_alleles": {
+    "rs1799853": {"C": "*1", "T": "*2"},
+    "rs1057910": {"A": "*1", "C": "*3"}
+  },
+  "slco1b1_rs4149056_risk_allele": "C",
+  "lpa_risk_alleles": {
+    "rs10455872": "G",
+    "rs3798220": "C"
+  }
+}

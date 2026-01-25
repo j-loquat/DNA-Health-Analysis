@@ -1,0 +1,275 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical DNA Report Template</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --primary-light: #ccfbf1;
+            --secondary: #64748b;
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+
+            --risk-high: #ef4444;
+            --risk-high-bg: #fee2e2;
+            --risk-med: #f97316;
+            --risk-med-bg: #ffedd5;
+            --risk-low: #22c55e;
+            --risk-low-bg: #dcfce7;
+            --risk-neutral: #3b82f6;
+            --risk-neutral-bg: #dbeafe;
+
+            --font-head: 'Outfit', sans-serif;
+            --font-body: 'DM Sans', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 600; letter-spacing: -0.02em; }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            margin-bottom: 60px;
+            text-align: center;
+        }
+        .report-badge {
+            display: inline-block;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 6px 16px;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+        h1 { font-size: 3rem; margin-bottom: 12px; color: var(--text-main); }
+        .meta { color: var(--text-muted); font-size: 1.1rem; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .col-full { grid-column: span 12; }
+        .col-half { grid-column: span 6; }
+        .col-third { grid-column: span 4; }
+
+        @media (max-width: 768px) {
+            .col-half, .col-third { grid-column: span 12; }
+            h1 { font-size: 2rem; }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+            height: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .card-title { font-size: 1.25rem; color: var(--text-main); }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .status-high { background: var(--risk-high-bg); color: var(--risk-high); }
+        .status-med { background: var(--risk-med-bg); color: var(--risk-med); }
+        .status-low { background: var(--risk-low-bg); color: var(--risk-low); }
+        .status-neutral { background: var(--risk-neutral-bg); color: var(--risk-neutral); }
+        .status-risk { background: #fee2e2; color: #b91c1c; }
+        .status-protective { background: #dcfce7; color: #15803d; }
+        .status-missing { background: #e2e8f0; color: #334155; }
+        .status-proxy { background: #e0f2fe; color: #0369a1; }
+        .status-caution { background: #fef9c3; color: #a16207; }
+
+        .risk-card { border-left: 6px solid; position: relative; overflow: hidden; }
+        .risk-card.high { border-color: var(--risk-high); }
+        .risk-card.med { border-color: var(--risk-med); }
+        .risk-card.low { border-color: var(--risk-low); }
+
+        .risk-val { font-size: 2.5rem; font-weight: 700; margin-bottom: 8px; line-height: 1; }
+        .risk-label { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        .risk-desc { margin-top: 12px; font-size: 0.95rem; color: var(--text-muted); }
+        .risk-evidence { margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
+        .risk-action { margin-top: 16px; padding-top: 16px; border-top: 1px dashed #e2e8f0; font-size: 0.9rem; font-weight: 500; color: var(--text-main); }
+        .risk-action strong { color: var(--primary); }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { font-weight: 500; }
+        .data-val { text-align: right; }
+        .data-sub { font-size: 0.85rem; color: var(--text-muted); display: block; }
+
+        .section-head {
+            margin: 60px 0 30px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .section-head h2 { font-size: 1.75rem; color: var(--text-main); }
+        .section-line { flex-grow: 1; height: 1px; background: #e2e8f0; }
+
+        .fun-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
+        .sub-row .data-label { padding-left: 28px; color: var(--text-muted); font-size: 0.9rem; }
+        .panel-lines { display: grid; gap: 4px; color: var(--text-muted); font-size: 0.9rem; white-space: nowrap; }
+        .panel-lines { overflow-x: auto; }
+        .fun-columns {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+        }
+        .fun-full { grid-column: 1 / -1; }
+        .fun-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        @media (max-width: 768px) {
+            .fun-columns { grid-template-columns: 1fr; }
+        }
+
+        footer {
+            margin-top: 80px;
+            padding-top: 40px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .disclaimer {
+            max-width: 900px;
+            margin: 0 auto 40px;
+            background: #fff1f2;
+            color: #be123c;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #fecdd3;
+        }
+        .demographics-note {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #7f1d1d;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <span class="report-badge">Clinical Genomics Report</span>
+            <h1>AncestryDNA Analysis</h1>
+            <div class="meta">File: [filename].txt • Date: [date] • Call Rate: [call_rate]%</div>
+        </header>
+
+        <div class="disclaimer">
+            <strong>Medical Disclaimer:</strong> This report is for educational and research purposes only. Genetic associations are statistical and do not constitute a medical diagnosis. Do not change medications or treatment plans without consulting a physician.
+            <div class="demographics-note">[demographics_note]</div>
+        </div>
+
+        <div class="section-head">
+            <h2>Quality Control Summary</h2>
+            <div class="section-line"></div>
+        </div>
+        <div class="dashboard-grid">
+            <div class="col-full card">
+                <!-- QC summary inserted here -->
+            </div>
+        </div>
+
+        <!-- Coverage notes inserted here -->
+
+        <!-- Sections below should be populated from run JSON outputs -->
+        <div class="section-head">
+            <h2>Actionable Clinical & Pharmacogenomics</h2>
+            <div class="section-line"></div>
+        </div>
+        <div class="dashboard-grid">
+            <!-- Actionable risk cards inserted here -->
+        </div>
+
+        <div class="section-head">
+            <h2>Lifestyle & Genetic Associations</h2>
+            <div class="section-line"></div>
+        </div>
+        <div class="dashboard-grid">
+            <!-- Association risk cards inserted here -->
+        </div>
+
+        <div class="section-head">
+            <h2>Wellness & Lifestyle</h2>
+            <div class="section-line"></div>
+        </div>
+        <div class="dashboard-grid">
+            <!-- Wellness tables inserted here -->
+        </div>
+
+        <div class="fun-columns">
+            <!-- Fun trait cards inserted here -->
+        </div>
+
+        <div class="section-head">
+            <h2>Expanded Panels</h2>
+            <div class="section-line"></div>
+        </div>
+        <p class="fun-desc">These are common GWAS loci with small effect sizes; genotypes shown are raw allele pairs and do not imply risk unless a known effect allele is present. “Not Found” means the SNP was not in the file or had no call.</p>
+        <div class="dashboard-grid">
+            <div class="col-full card">
+                <!-- Expanded panels inserted here -->
+            </div>
+        </div>
+
+        <!-- Trials section inserted here -->
+
+        <footer>
+            <p>&copy; 2026 Clinical Genomics Dashboard.</p>
+        </footer>
+
+    </div>
+
+</body>
+</html>

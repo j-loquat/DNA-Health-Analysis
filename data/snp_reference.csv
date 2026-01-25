@@ -1,0 +1,105 @@
+panel,rsid,label,gene,effect_allele,effect_trait,non_effect_trait,evidence_note,notes
+Core Wellness,rs4988235,Lactase persistence,LCT,,,,,
+Core Wellness,rs671,Alcohol flush,ALDH2,,,,,
+Core Wellness,rs762551,Caffeine metabolism,CYP1A2,,,,,
+Core Wellness,rs5751876,Caffeine anxiety,ADORA2A,,,,,
+Core Wellness,rs1815739,Muscle performance,ACTN3,,,,,
+Core Wellness,rs4680,COMT Val158Met,COMT,,,,,
+Core Wellness,rs429358,APOE SNP (rs429358),APOE,,,,,
+Core Wellness,rs7412,APOE SNP (rs7412),APOE,,,,,
+Core Wellness,rs713598,Bitter taste,TAS2R38,,,,,
+Core Wellness,rs72921001,Cilantro soapiness,OR6A2,,,,,
+Structural & Functional,rs12722,Tendon/Ligament risk,COL5A1,,,,,
+Structural & Functional,rs1800012,Bone/Collagen strength,COL1A1,,,,,
+Structural & Functional,rs1799971,Pain sensitivity,OPRM1,,,,,
+Dietary Sensitivities,rs5082,Saturated fat response,APOA2,,,,,
+Dietary Sensitivities,rs699,Salt sensitivity,AGT,,,,,
+Dietary Sensitivities,rs4343,Salt sensitivity (ACE proxy),ACE,,,,,
+Dietary Sensitivities,rs16890979,Uric acid transport,SLC2A9,,,,,
+Celiac / Gluten Tags,rs3135388,HLA-DQ2.5 tag,HLA-DQA1,,,,,
+Celiac / Gluten Tags,rs7454108,HLA-DQ8 tag,HLA-DQB1,,,,,
+Sleep & Chronotype,rs1801260,Chronotype (CLOCK),CLOCK,,,,,
+Sleep & Chronotype,rs73598374,Deep sleep (ADA),ADA,,,,,
+Healthy Aging,rs1801133,MTHFR C677T,MTHFR,,,,,
+Healthy Aging,rs1801131,MTHFR A1298C,MTHFR,,,,,
+Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,,,,,
+Healthy Aging,rs2282679,Vitamin D (GC),GC,,,,,
+Healthy Aging,rs602662,Vitamin B12 (FUT2),FUT2,,,,,
+Healthy Aging,rs174546,Omega-3 conversion (FADS1),FADS1,,,,,
+Healthy Aging,rs2274924,Magnesium (TRPM6),TRPM6,,,,,
+Healthy Aging,rs1061170,CFH macular degeneration,CFH,,,,,
+Healthy Aging,rs6265,BDNF brain plasticity,BDNF,,,,,
+Healthy Aging,rs9939609,FTO appetite,FTO,,,,,
+Hidden Actionable Risks,rs4149056,Statin muscle risk,SLCO1B1,,,,,
+Hidden Actionable Risks,rs4244285,Clopidogrel response,CYP2C19,,,,,
+Hidden Actionable Risks,rs1800562,Hemochromatosis C282Y,HFE,,,,,
+Hidden Actionable Risks,rs1799945,Hemochromatosis H63D,HFE,,,,,
+Hidden Actionable Risks,rs6025,Factor V Leiden,F5,,,,,
+Hidden Actionable Risks,rs1799963,Prothrombin G20210A,F2,,,,,
+Hidden Actionable Risks,rs1333049,9p21 CAD locus,CDKN2A/B,,,,,
+Hidden Actionable Risks,rs3798220,Lp(a) risk,LPA,,,,,
+Cardiometabolic,rs7903146,Type 2 diabetes (TCF7L2),TCF7L2,,,,,
+Cardiometabolic,rs738409,Fatty liver (PNPLA3 I148M),PNPLA3,,,,,
+Cardiometabolic,rs10455872,Lp(a) levels,LPA,,,,,
+Cardiometabolic,rs662799,Triglycerides (APOA5),APOA5,,,,,
+Cardiometabolic,rs708272,HDL-C (CETP),CETP,,,,,
+Neuro/Psych,rs34637584,Parkinson risk (LRRK2 G2019S),LRRK2,,,,,
+Neuro/Psych,rs1052553,MAPT H1/H2 haplotype,MAPT,,,,,
+Neuro/Psych,rs17070145,Memory performance (KIBRA),KIBRA,,,,,
+Neuro/Psych,rs25531,Serotonin transporter proxy,SLC6A4,,,,,
+Cancer,rs6983267,8q24 cancer locus,8q24,,,,,
+Cancer,rs2736100,TERT cancer locus,TERT,,,,,
+Cancer,rs2981582,FGFR2 breast risk,FGFR2,,,,,
+Cancer,rs10993994,MSMB prostate risk,MSMB,,,,,
+Pharmacogenomics,rs9923231,VKORC1 warfarin sensitivity,VKORC1,,,,,
+Pharmacogenomics,rs1799853,CYP2C9*2,CYP2C9,,,,,
+Pharmacogenomics,rs1057910,CYP2C9*3,CYP2C9,,,,,
+Pharmacogenomics,rs1800460,TPMT*3B,TPMT,,,,,
+Pharmacogenomics,rs1142345,TPMT*3C,TPMT,,,,,
+Pharmacogenomics,rs116855232,NUDT15,NUDT15,,,,,
+Pharmacogenomics,rs2395029,HLA-B*57:01 proxy,HLA-B,,,,,
+Pharmacogenomics,rs3918290,DPYD*2A,DPYD,,,,,
+Pharmacogenomics,rs67376798,DPYD c.2846A>T,DPYD,T,Decreased function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs55886062,DPYD c.1679T>G,DPYD,G,No function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs56038477,DPYD c.1236G>A (HapB3 tag),DPYD,A,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs75017182,DPYD c.1129-5923C>G (HapB3),DPYD,G,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs4986893,CYP2C19*3,CYP2C19,A,No function allele.,Normal function allele.,CPIC CYP2C19 guideline,CPIC
+Pharmacogenomics,rs12248560,CYP2C19*17,CYP2C19,T,Increased function allele.,Normal function allele.,CPIC CYP2C19 guideline,CPIC
+Pharmacogenomics,rs776746,CYP3A5*3 (tacrolimus),CYP3A5,G,Non-expresser marker.,Expressor marker.,CPIC tacrolimus guideline,CPIC
+Pharmacogenomics,rs3745274,CYP2B6 516G>T,CYP2B6,T,Decreased function marker.,Normal function marker.,CPIC efavirenz guideline,CPIC
+Pharmacogenomics,rs2279343,CYP2B6 785A>G,CYP2B6,G,Decreased function marker.,Normal function marker.,CPIC efavirenz guideline,CPIC
+Pharmacogenomics,rs4148323,UGT1A1*6 (atazanavir),UGT1A1,A,Decreased function allele.,Normal function allele.,CPIC atazanavir guideline,CPIC
+CYP2D6 Risk Factors,rs1065852,CYP2D6*10 risk factor,CYP2D6,,,,,
+CYP2D6 Risk Factors,rs3892097,CYP2D6*4 risk factor,CYP2D6,,,,,
+Lifestyle,rs1229984,ADH1B alcohol metabolism,ADH1B,A,Faster alcohol metabolism,Typical alcohol metabolism,,
+Lifestyle,rs16969968,CHRNA5 nicotine dependence,CHRNA5,A,Nicotine dependence tendency,Lower nicotine dependence tendency,,
+Functional Health - Histamine,rs10156191,Histamine intolerance risk,AOC1 (DAO),T,Reduced DAO activity; potential histamine food sensitivity.,No risk detected,"If symptoms (migraines, GI issues) after aged/fermented foods, consider a low-histamine diet or DAO supplementation trial.",Histamine Intolerance panel
+Functional Health - Histamine,rs2052129,Histamine intolerance risk,AOC1 (DAO),T,Reduced DAO enzyme activity.,No risk detected,"If symptoms (migraines, GI issues) after aged/fermented foods, consider a low-histamine diet or DAO supplementation trial.",Verify strand in Step 3.
+Functional Health - Histamine,rs11558538,Histamine intolerance (CNS),HNMT,T,Reduced HNMT activity (Thr105Ile); higher neuro histamine symptoms (migraines/brain fog).,No risk detected,"If symptoms (migraines, brain fog) after histamine-rich foods, consider a low-histamine diet trial.",Histamine Intolerance panel
+Functional Health - Detox/Acetylation,rs1801280,Slow acetylation,NAT2*5,T,Common slow acetylator allele (drugs/carcinogens).,,,Detoxification & Acetylation panel
+Functional Health - Detox/Acetylation,rs1799930,Slow acetylation,NAT2*6,A,Slow acetylator allele.,,,Detoxification & Acetylation panel
+Functional Health - Detox/Acetylation,rs1799931,Slow acetylation,NAT2*7,A,Slow acetylator allele.,,,Detoxification & Acetylation panel
+Functional Health - Autoimmune,rs3177928,Autoimmune thyroid risk (HLA-DRA),HLA-DRA,A,Risk detected,No risk,"Associated with autoimmune thyroid disease/Graves'. Screening only; consider TSH/thyroid antibodies if symptoms or family history.",Autoimmune screening panel
+Functional Health - Autoimmune,rs7197,Autoimmune thyroid risk (HLA-DRA),HLA-DRA,A,Risk detected,No risk,"Second HLA-DRA marker linked to Graves'. Screening only; consider TSH/thyroid antibodies if symptoms or family history.",Autoimmune screening panel
+Functional Health - Autoimmune,rs4349859,HLA-B27 proxy,HLA-B,G,Risk detected,No risk,Marker for HLA-B*27 (ankylosing spondylitis risk).,Verify strand in Step 3.
+Functional Health - Hormone,rs2234693,Estrogen sensitivity,ESR1,C,Modulates bone density response to estrogen; may influence hormone therapy sensitivity.,,,Hormone metabolism panel (PvuII allele; verify strand).
+Functional Health - Hormone,rs4680,Estrogen clearance,COMT,A,Slower breakdown of catechol estrogens; may influence hormone therapy sensitivity.,,,Hormone metabolism context
+Functional Health - Hormone,rs1799853,Estrogen clearance (CYP2C9*2),CYP2C9,,,,"CYP2C9 variant that may reduce estrogen clearance; relevant for OC/HRT side effects.",Hormone metabolism context
+Functional Health - Hormone,rs1057910,Estrogen clearance (CYP2C9*3),CYP2C9,,,,"CYP2C9 variant that may reduce estrogen clearance; relevant for OC/HRT side effects.",Hormone metabolism context
+Fun Traits - Appearance,rs12913832,Eye color (HERC2),HERC2,G,Lighter eye color tendency,Darker eye color tendency,,Association only
+Fun Traits - Appearance,rs1805007,Red hair tendency (MC1R),MC1R,T,Red hair or freckles tendency,Lower red hair tendency,,Association only
+Fun Traits - Appearance,rs1800407,Eye color shade (OCA2),OCA2,A,Lighter eye color tendency,Darker eye color tendency,,Association only
+Fun Traits - Appearance,rs1426654,Skin pigmentation (SLC24A5),SLC24A5,A,Lighter skin pigmentation,Darker skin pigmentation,,Association only
+Fun Traits - Appearance,rs16891982,Skin or hair pigmentation (SLC45A2),SLC45A2,G,Lighter skin or hair pigmentation,Darker skin or hair pigmentation,,Association only
+Fun Traits - Appearance,rs885479,Freckles or sun sensitivity (MC1R),MC1R,A,Freckling or sun sensitivity tendency,Lower freckling tendency,,Association only
+Fun Traits - Appearance,rs7349332,Male pattern baldness (AR region),AR,T,Male pattern baldness tendency,Lower baldness tendency,,Association only
+Fun Traits - Sensory,rs838133,Sweet preference (FGF21),FGF21,A,Higher sweet preference,Lower sweet preference,,Association only
+Fun Traits - Sensory,rs34160967,Umami sensitivity (TAS1R1),TAS1R1,G,Higher umami sensitivity,Lower umami sensitivity,,Association only
+Fun Traits - Sensory,rs4481887,Asparagus odor detection (OR2M7),OR2M7,A,Asparagus odor detection,Lower asparagus odor detection,,Association only
+Fun Traits - Body & Appetite,rs9930506,Appetite tendency (FTO),FTO,G,Higher appetite or BMI tendency,Lower appetite or BMI tendency,,Association only
+Fun Traits - Body & Appetite,rs17782313,Appetite tendency (MC4R),MC4R,C,Higher appetite tendency,Lower appetite tendency,,Association only
+Fun Traits - Body & Appetite,rs4846567,Fat distribution (LYPLAL1),LYPLAL1,G,Central fat distribution tendency,Lower central fat distribution tendency,,Association only
+Fun Traits - Sleep,rs1801260,Chronotype (CLOCK),CLOCK,C,Evening preference,Morning preference,,Association only
+Fun Traits - Sleep,rs73598374,Sleep depth (ADA),ADA,A,Deeper sleep tendency,Lighter sleep tendency,,Association only
+Fun Traits - Behavior,rs1800497,Reward sensitivity (DRD2/ANKK1),DRD2/ANKK1,T,Higher reward seeking tendency,Lower reward seeking tendency,,Association only
+Fun Traits - Behavior,rs16969968,Nicotine dependence tendency (CHRNA5),CHRNA5,A,Nicotine dependence tendency,Lower nicotine dependence tendency,,Association only
