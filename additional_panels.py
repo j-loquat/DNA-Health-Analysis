@@ -72,6 +72,8 @@ def check_panels(parquet_path: str, base_name: str) -> None:
         "Lifestyle",
         "Functional Health - Histamine",
         "Functional Health - Detox/Acetylation",
+        "Functional Health - Inflammation",
+        "Functional Health - VDR/Bone",
         "Functional Health - Autoimmune",
         "Functional Health - Hormone",
     ]

@@ -486,6 +486,10 @@ def _wellness_emoji(label: str) -> str:
         return "🛡️"
     if "estrogen" in key or "hormone" in key:
         return "🌸"
+    if "inflammation" in key:
+        return "🔥"
+    if "vdr" in key or "bone" in key:
+        return "🦴"
     return "✨"
 
 def _panel_display_name(panel_name: str) -> str:
@@ -498,6 +502,8 @@ def _functional_evidence(panel_name: str) -> str:
         "Functional Health - Autoimmune": "Association/Tag",
         "Functional Health - Histamine": "Association",
         "Functional Health - Hormone": "Association/Context",
+        "Functional Health - Inflammation": "Association",
+        "Functional Health - VDR/Bone": "Association",
     }
     return mapping.get(panel_name, "Association")
 
@@ -508,6 +514,8 @@ def _functional_tags(panel_name: str) -> str:
         "Functional Health - Autoimmune": "Thyroid autoimmunity; ankylosing spondylitis",
         "Functional Health - Histamine": "DAO/HNMT; histamine intolerance",
         "Functional Health - Hormone": "OC/HRT sensitivity; estrogen metabolism",
+        "Functional Health - Inflammation": "Systemic inflammation; cytokines",
+        "Functional Health - VDR/Bone": "Vitamin D receptor; bone health",
     }
     return mapping.get(panel_name, "")
 
@@ -522,6 +530,11 @@ def _next_test_for_entry(rsid: str, panel_name: str) -> str | None:
         "rs11558538": "Symptom-guided histamine elimination trial",
         "rs2234693": "Discuss with clinician if on OC/HRT",
         "rs4680": "Discuss with clinician if on OC/HRT",
+        "rs1800629": "hs-CRP or cytokine panel if symptoms of chronic inflammation",
+        "rs1800795": "hs-CRP or cytokine panel if symptoms of chronic inflammation",
+        "rs1800896": "hs-CRP or cytokine panel if symptoms of chronic inflammation",
+        "rs4880": "Mitochondrial health assessment if fatigue/exercise intolerance",
+        "rs1544410": "Serum 25-OH Vitamin D and bone density (DEXA) if indicated",
     }
     if rsid in mapping:
         return mapping[rsid]
@@ -950,6 +963,8 @@ def _wellness_tables(
     for panel_name in (
         "Functional Health - Histamine",
         "Functional Health - Detox/Acetylation",
+        "Functional Health - Inflammation",
+        "Functional Health - VDR/Bone",
         "Functional Health - Autoimmune",
         "Functional Health - Hormone",
     ):
