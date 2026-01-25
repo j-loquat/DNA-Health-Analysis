@@ -2,6 +2,10 @@
 
 A reproducible, AI-assisted pipeline to analyze raw DNA text files (AncestryDNA, 23andMe, MyHeritage) for health, lifestyle, and pharmacogenomic insights.
 
+This was built using AI coding agents with science skills from [K-Dense-AI](https://github.com/K-Dense-AI/claude-scientific-skills).
+
+It leverages a download from [GWAS Catalog - The NHGRI-EBI Catalog of human genome-wide association studies](https://www.ebi.ac.uk/gwas/docs/file-downloads) for locally storing the "All associations v1.0.2 - with added ontology annotations, GWAS Catalog study accession numbers and genotyping technology".
+
 ## Quick Start
 
 ### 1. Prerequisites
@@ -41,3 +45,6 @@ This workflow follows the steps detailed in [`DNA_Analysis_Steps.md`](DNA_Analys
 
 ## Disclaimer
 **This is not medical advice.** This tool is for educational and research purposes only. Always consult a healthcare professional for medical diagnosis and decision-making.
+
+## Sample Output
+![Sample Report](sample-report.png)
