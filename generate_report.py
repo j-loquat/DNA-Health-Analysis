@@ -81,7 +81,7 @@ def _risk_card(
 
 def _nat2_slow_status(genotypes: dict[str, str]) -> str | None:
     slow_alleles = {
-        "rs1801280": "T",
+        "rs1801280": "C",
         "rs1799930": "A",
         "rs1799931": "A",
     }
@@ -329,7 +329,7 @@ def _build_risk_cards(
     dpyd_variants: list[str] = []
     if _risk_allele_present("rs3918290", genotypes.get("rs3918290"), "A", variant_lookup):
         dpyd_variants.append("rs3918290 (*2A)")
-    if _risk_allele_present("rs67376798", genotypes.get("rs67376798"), "T", variant_lookup):
+    if _risk_allele_present("rs67376798", genotypes.get("rs67376798"), "A", variant_lookup):
         dpyd_variants.append("rs67376798 (c.2846A>T)")
     if _risk_allele_present("rs55886062", genotypes.get("rs55886062"), "G", variant_lookup):
         dpyd_variants.append("rs55886062 (c.1679T>G)")

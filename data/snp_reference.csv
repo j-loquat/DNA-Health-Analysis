@@ -68,7 +68,7 @@ Pharmacogenomics,rs1142345,TPMT*3C,TPMT,,,,,
 Pharmacogenomics,rs116855232,NUDT15,NUDT15,,,,,
 Pharmacogenomics,rs2395029,HLA-B*57:01 proxy,HLA-B,,,,,
 Pharmacogenomics,rs3918290,DPYD*2A,DPYD,,,,,
-Pharmacogenomics,rs67376798,DPYD c.2846A>T,DPYD,T,Decreased function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs67376798,DPYD c.2846A>T,DPYD,A,Decreased function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs55886062,DPYD c.1679T>G,DPYD,G,No function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs56038477,DPYD c.1236G>A (HapB3 tag),DPYD,A,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs75017182,DPYD c.1129-5923C>G (HapB3),DPYD,G,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
@@ -91,12 +91,12 @@ Functional Health - VDR/Bone,rs1544410,VDR BsmI,VDR,,,,,
 Functional Health - Histamine,rs10156191,Histamine intolerance risk,AOC1 (DAO),T,Reduced DAO activity; potential histamine food sensitivity.,No risk detected,"If symptoms (migraines, GI issues) after aged/fermented foods, consider a low-histamine diet or DAO supplementation trial.",Histamine Intolerance panel
 Functional Health - Histamine,rs2052129,Histamine intolerance risk,AOC1 (DAO),T,Reduced DAO enzyme activity.,No risk detected,"If symptoms (migraines, GI issues) after aged/fermented foods, consider a low-histamine diet or DAO supplementation trial.",Verify strand in Step 3.
 Functional Health - Histamine,rs11558538,Histamine intolerance (CNS),HNMT,T,Reduced HNMT activity (Thr105Ile); higher neuro histamine symptoms (migraines/brain fog).,No risk detected,"If symptoms (migraines, brain fog) after histamine-rich foods, consider a low-histamine diet trial.",Histamine Intolerance panel
-Functional Health - Detox/Acetylation,rs1801280,Slow acetylation,NAT2*5,T,Common slow acetylator allele (drugs/carcinogens).,,,Detoxification & Acetylation panel
+Functional Health - Detox/Acetylation,rs1801280,Slow acetylation,NAT2*5,C,Common slow acetylator allele (drugs/carcinogens).,,,Detoxification & Acetylation panel
 Functional Health - Detox/Acetylation,rs1799930,Slow acetylation,NAT2*6,A,Slow acetylator allele.,,,Detoxification & Acetylation panel
 Functional Health - Detox/Acetylation,rs1799931,Slow acetylation,NAT2*7,A,Slow acetylator allele.,,,Detoxification & Acetylation panel
 Functional Health - Autoimmune,rs3177928,Autoimmune thyroid risk (HLA-DRA),HLA-DRA,A,Risk detected,No risk,"Associated with autoimmune thyroid disease/Graves'. Screening only; consider TSH/thyroid antibodies if symptoms or family history.",Autoimmune screening panel
 Functional Health - Autoimmune,rs7197,Autoimmune thyroid risk (HLA-DRA),HLA-DRA,A,Risk detected,No risk,"Second HLA-DRA marker linked to Graves'. Screening only; consider TSH/thyroid antibodies if symptoms or family history.",Autoimmune screening panel
-Functional Health - Autoimmune,rs4349859,HLA-B27 proxy,HLA-B,G,Risk detected,No risk,Marker for HLA-B*27 (ankylosing spondylitis risk).,Verify strand in Step 3.
+Functional Health - Autoimmune,rs4349859,HLA-B27 proxy,HLA-B,A,Risk detected,No risk,Marker for HLA-B*27 (ankylosing spondylitis risk).,Verify strand in Step 3.
 Functional Health - Hormone,rs2234693,Estrogen sensitivity,ESR1,C,Modulates bone density response to estrogen; may influence hormone therapy sensitivity.,,,Hormone metabolism panel (PvuII allele; verify strand).
 Functional Health - Hormone,rs4680,Estrogen clearance,COMT,A,Slower breakdown of catechol estrogens; may influence hormone therapy sensitivity.,,,Hormone metabolism context
 Functional Health - Hormone,rs1799853,Estrogen clearance (CYP2C9*2),CYP2C9,,,,"CYP2C9 variant that may reduce estrogen clearance; relevant for OC/HRT side effects.",Hormone metabolism context
