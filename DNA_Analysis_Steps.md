@@ -46,7 +46,7 @@ This document captures the exact steps, scripts (you may need to create), and sk
 
 1.  **Script:** `uv run --script qc_analysis.py [filename]`
 2.  **Action:** Reads the raw text file (skipping comments), checks for valid alleles (A, C, G, T), counts missing rows, and saves a normalized Parquet file.
-    * QC adds: heterozygosity rate, sex inference (X/Y metrics), missingness by chromosome, duplicate rsID detection, ambiguous A/T or C/G SNP count, and build detection from header.
+    * QC adds: heterozygosity rate, sex inference (X/Y metrics), missingness by chromosome, duplicate rsID detection, ambiguous A/T or C/G SNP count, and build detection from header (supports GRCh37/HG19 and “build 37.x” wording).
 3.  **Output:** `runs/YYYYMMDD/[filename]/[filename].normalized.parquet` (Used by all subsequent steps).
 4.  **Additional Output:** `runs/YYYYMMDD/[filename]/summary.json` (QC stats + downstream file paths).
 5.  **Optional:** If the user provides sex/gender, add `sex` to `summary.json` (values: `female`/`male`) so estrogen-related notes render correctly.
@@ -211,43 +211,51 @@ This document captures the exact steps, scripts (you may need to create), and sk
 - **GWAS/common risk loci (e.g., cancer, many cardiometabolic markers):** Low effect sizes; not diagnostic. Use to contextualize risk, not to make clinical decisions.
 - **Pharmacogenomics:** Actionable only when **clinical-grade PGx** testing confirms genotype and phenotype (e.g., warfarin dosing, thiopurines, DPYD, HLA-B*57:01).
 - **CYP2D6:** Do not assign metabolizer phenotype from array data; CNVs drive poor/ultra-rapid status and are not captured.
-- **NAT2:** Infer acetylation phenotype using rs1801280/rs1799930/rs1799931 (≥2 slow alleles = slow acetylator); highlight drug dosing and toxin-exposure relevance.
+- **NAT2:** Use rs1801280/rs1799930/rs1799931 as a **partial panel**. If any marker is missing, report “unknown.” If all three are present, **≥2 slow alleles = likely slow acetylator (screening-level)**; 1 slow allele = indeterminate without full haplotyping. Highlight drug dosing/toxin-exposure relevance but require clinical confirmation.
 - **Lifestyle/behavior markers:** Often ancestry-dependent and environment-modulated; treat as informational, not prescriptive.
 - **Fun Traits & Appearance:** Use the report's friendly association text + short evidence note; always include "This is not medical advice."
 
-## Step 7: Research Augmentation (Web)
+## Step 7: Research Augmentation (Agent Task)
 **Goal:** Find the latest (2024-2026) consensus on handling the specific genotypes found.
 
-1.  **Tool:** `google_search` (or `perplexity-search` / `research-lookup`)
-2.  **Queries:**
+1.  **Optional Template Script (new):** `uv run --script build_research_findings.py [filename]`
+    *   Writes `runs/YYYYMMDD/[filename]/research_findings.json` in UTF-8 (no BOM).
+    *   **Default behavior:** skips output if no high-priority findings.
+    *   Use `--write-empty` to force an empty file.
+    *   Fill in `content` + `source` fields after targeted searches.
+2.  **Action:** The Agent reviews previous steps, identifies high-priority risks, and performs targeted searches.
+3.  **Tool:** use your web search tool
+4.  **Output:** Save findings to `runs/YYYYMMDD/[filename]/research_findings.json`.
+    *   **Format:** A JSON list of objects: `{"topic": "...", "content": "...", "source": "..."}`.
+    *   Empty `content` entries are ignored in the report.
+5.  **Example Queries:**
     *   "MTHFR compound heterozygote lifestyle recommendations 2025"
-    *   "FOXO3 rs2802292 TT vs G longevity effect magnitude"
-    *   "CFH Y402H diet prevention macular degeneration"
-    *   "COMT Val158Met CYP1A2 interaction caffeine"
-    *   "Factor V Leiden rs6025 health implications 2025"
+    *   "Prothrombin G20210A lifestyle precautions 2025"
+    *   "Lp(a) high risk lifestyle management 2025"
+    *   "CHRNA5 AA nicotine dependence implications"
     *   "CYP2C19 poor metabolizer drugs to avoid"
-3.  **Rule:** Use local reference tables first; only run web searches when a SNP is clinically actionable or the local table lacks interpretation.
+6.  **Rule:** Use local reference tables first; only run web searches when a SNP is clinically actionable or the local table lacks interpretation.
 
 ## Step 8: Clinical Trials Search (Conditional)
 **Goal:** Only if **critical findings** are detected, search for recruiting clinical trials relevant to those findings.
 
 1.  **Script:** `uv run --script search_trials_for_findings.py [filename]`
     * Optional filters: `--location "City, State"` or `--geo "distance(lat,lon,50mi)"` to narrow recruiting studies.
-2.  **Action:** Reads detected **critical findings**, maps them to ClinicalTrials.gov search terms, and queries the **API v2** for `RECRUITING` studies. Writes `runs/YYYYMMDD/[filename]/trials_by_finding.json`.
+2.  **Action:** Reads detected **critical findings** (high-severity only), maps them to ClinicalTrials.gov search terms, and queries the **API v2** for `RECRUITING` studies. Writes `runs/YYYYMMDD/[filename]/trials_by_finding.json`. This avoids low-priority queries (e.g., NAT2-only findings) unless explicitly requested.
 3.  **Behavior:** If **no critical findings** or **no mapped queries**, no trials file is produced and the report omits the trials section.
 4.  **Skill Used:** `clinicaltrials-database`.
 
-## Step 9: Final Report Generation (Markdown)
-**Goal:** Synthesize all findings into a readable Markdown document.
+## Step 9: Final Report Generation (Markdown & HTML)
+**Goal:** Synthesize all findings into polished documents.
 
 1.  **Script:** `uv run --script generate_report.py [filename]`
-2.  **Use Data Sources:** `summary.json`, `core_traits.json`, `healthy_aging.json`, `hidden_risks.json`, `expanded_panels.json`, `variant_verification.json`, `amd_trials.json`, plus `data/clinical_interpretations.json`.
+2.  **Use Data Sources:** `summary.json`, `core_traits.json`, `healthy_aging.json`, `hidden_risks.json`, `expanded_panels.json`, `variant_verification.json`, `trials_by_finding.json`, `research_findings.json`, plus `data/clinical_interpretations.json`.
 3.  **Content Must Include:**
-    * **Critical Findings** (e.g., DPYD*2A, Prothrombin G20210A, CHRNA5 nicotine, MTHFR compound het)
-    * **Wellness Tables** (Metabolism/Diet, Fitness/Aging, Lifestyle/Exposure, Functional Health) with friendly status labels
-    * **Expanded Panels** summary (cardiometabolic, neuro, cancer, PGx, CYP2D6)
-    * **Fun Traits** section (appearance, taste, sleep)
-    * **Clinical Trials** list (from amd_trials.json)
-    * **Limitations** (CYP2D6 CNV + GSTM1/GSTT1 CNV + strand orientation note including HLA-B27 proxy)
+    * **Critical Findings** (Actionable items like Prothrombin G20210A, CYP2C9)
+    * **Wellness Tables** (Metabolism, Fitness, Functional Health)
+    * **Research Augmentation** (Section 8: 2025/2026 Consensus notes from Step 7)
+    * **Clinical Trials** (Recruiting studies from Step 8)
+    * **Limitations** (Disclaimer and technical caveats)
 4.  **Output:** `runs/YYYYMMDD/[filename]/[filename]_Report.md` and `runs/YYYYMMDD/[filename]/[filename]_Report.html`.
-5.  **HTML Template:** Uses `report_template.html` in the project root; sections expand/contract based on available run JSON outputs.
+5.  **HTML Template:** Uses `report_template.html` in root; sections expand based on JSON availability.
+

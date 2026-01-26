@@ -17,7 +17,7 @@ import argparse
 import requests
 
 import generate_report as report
-from run_utils import resolve_base_name, run_root, update_summary, write_json
+from run_utils import load_summary, resolve_base_name, run_root, update_summary, write_json
 
 
 @dataclass(frozen=True)
@@ -108,6 +108,15 @@ def _load_genotypes(run_dir: Path) -> dict[str, str]:
     expanded = report._load_json(run_dir / "expanded_panels.json")
     return report._merge_genotypes(core_traits, healthy, hidden, expanded)
 
+def _clear_trials(run_dir: Path) -> None:
+    output_path = run_dir / "trials_by_finding.json"
+    if output_path.exists():
+        output_path.unlink()
+    summary = load_summary(run_dir)
+    if "trials_by_finding_path" in summary:
+        summary.pop("trials_by_finding_path", None)
+        write_json(run_dir / "summary.json", summary)
+
 
 def search_trials_for_findings(
     base_name: str,
@@ -121,13 +130,18 @@ def search_trials_for_findings(
         card for card in report._build_risk_cards(genotypes)
         if card.get("category") == "clinical"
     ]
+    critical_cards = [
+        card for card in risk_cards
+        if card.get("level") == "high" and card.get("label") in FINDING_QUERY_MAP
+    ]
 
-    if not risk_cards:
+    if not critical_cards:
+        _clear_trials(run_dir)
         print("No critical findings detected; skipping clinical trials search.")
         return
 
     findings_payload: list[dict[str, Any]] = []
-    for card in risk_cards:
+    for card in critical_cards:
         query = FINDING_QUERY_MAP.get(card["label"])
         if not query:
             continue
@@ -144,6 +158,7 @@ def search_trials_for_findings(
         )
 
     if not findings_payload:
+        _clear_trials(run_dir)
         print("No trial queries mapped to detected findings; skipping output.")
         return
 

@@ -15,7 +15,14 @@ from typing import Any
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "cp1252"):
+        try:
+            return json.loads(raw.decode(encoding))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    print(f"Warning: unable to parse JSON at {path}; skipping.")
+    return {}
 
 
 def _find_run_dir(base_name: str, run_date: str | None) -> Path:
@@ -79,19 +86,26 @@ def _risk_card(
     }
 
 
-def _nat2_slow_status(genotypes: dict[str, str]) -> str | None:
+def _nat2_profile(genotypes: dict[str, str]) -> dict[str, Any]:
     slow_alleles = {
         "rs1801280": "C",
         "rs1799930": "A",
         "rs1799931": "A",
     }
-    if any(rsid not in genotypes for rsid in slow_alleles):
-        return None
+    missing = [rsid for rsid in slow_alleles if rsid not in genotypes]
+    if missing:
+        return {"status": "unknown", "slow_count": None, "missing": missing}
     slow_count = 0
     for rsid, allele in slow_alleles.items():
         genotype = genotypes.get(rsid, "")
         slow_count += sum(1 for base in genotype if base == allele)
-    return "slow" if slow_count >= 2 else "not_slow"
+    if slow_count >= 2:
+        status = "likely_slow"
+    elif slow_count == 1:
+        status = "indeterminate"
+    else:
+        status = "no_slow_markers"
+    return {"status": status, "slow_count": slow_count, "missing": []}
 
 
 def _variant_lookup(variant_verification: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -313,13 +327,13 @@ def _build_risk_cards(
             )
         )
 
-    nat2_status = _nat2_slow_status(genotypes)
-    if nat2_status == "slow":
+    nat2_profile = _nat2_profile(genotypes)
+    if nat2_profile["status"] == "likely_slow":
         cards.append(
             _risk_card(
                 "Detox/Drug Metabolism",
                 "med",
-                "NAT2 slow acetylator pattern detected.",
+                "Likely NAT2 slow acetylator based on a partial SNP panel.",
                 "Confirm with clinical-grade PGx before dosing isoniazid/hydralazine/sulfasalazine; avoid smoking.",
                 evidence="CPIC",
                 category="clinical",
@@ -490,6 +504,18 @@ def _wellness_emoji(label: str) -> str:
         return "🔥"
     if "vdr" in key or "bone" in key:
         return "🦴"
+    if "methylation" in key:
+        return "⚙️"
+    if "longevity" in key:
+        return "⌛"
+    if "neuroplasticity" in key:
+        return "🧠"
+    if "oxidative" in key:
+        return "☢️"
+    if "metabolic" in key:
+        return "📊"
+    if "iron" in key:
+        return "🧲"
     return "✨"
 
 def _panel_display_name(panel_name: str) -> str:
@@ -504,6 +530,12 @@ def _functional_evidence(panel_name: str) -> str:
         "Functional Health - Hormone": "Association/Context",
         "Functional Health - Inflammation": "Association",
         "Functional Health - VDR/Bone": "Association",
+        "Functional Health - Methylation": "Biochemical Pathway",
+        "Functional Health - Longevity": "Statistical Association",
+        "Functional Health - Neuroplasticity": "Biological Mechanism",
+        "Functional Health - Oxidative Stress": "Biochemical Pathway",
+        "Functional Health - Metabolic": "GWAS Association",
+        "Functional Health - Iron Metabolism": "Clinical Risk",
     }
     return mapping.get(panel_name, "Association")
 
@@ -516,6 +548,12 @@ def _functional_tags(panel_name: str) -> str:
         "Functional Health - Hormone": "OC/HRT sensitivity; estrogen metabolism",
         "Functional Health - Inflammation": "Systemic inflammation; cytokines",
         "Functional Health - VDR/Bone": "Vitamin D receptor; bone health",
+        "Functional Health - Methylation": "B-Vitamins, Homocysteine, Folate",
+        "Functional Health - Longevity": "Aging pathways, FOXO3",
+        "Functional Health - Neuroplasticity": "BDNF, Brain health",
+        "Functional Health - Oxidative Stress": "Antioxidant enzymes, SOD2",
+        "Functional Health - Metabolic": "BMI tendency, Appetite, FTO",
+        "Functional Health - Iron Metabolism": "Hemochromatosis, Iron storage, HFE",
     }
     return mapping.get(panel_name, "")
 
@@ -535,6 +573,13 @@ def _next_test_for_entry(rsid: str, panel_name: str) -> str | None:
         "rs1800896": "hs-CRP or cytokine panel if symptoms of chronic inflammation",
         "rs4880": "Mitochondrial health assessment if fatigue/exercise intolerance",
         "rs1544410": "Serum 25-OH Vitamin D and bone density (DEXA) if indicated",
+        "rs1801133": "Serum homocysteine and RBC folate testing",
+        "rs1801131": "Serum homocysteine and RBC folate testing",
+        "rs1801394": "Serum B12 and methylmalonic acid (MMA) testing",
+        "rs1805087": "Serum homocysteine and B12 testing",
+        "rs234706": "Plasma amino acids (taurine/methionine) if indicated",
+        "rs1800562": "Serum ferritin and transferrin saturation",
+        "rs1799945": "Serum ferritin and transferrin saturation",
     }
     if rsid in mapping:
         return mapping[rsid]
@@ -803,39 +848,49 @@ def _apply_estrogen_notes(
 
 
 def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
-    slow_alleles = {
-        "rs1801280": "T",
-        "rs1799930": "A",
-        "rs1799931": "A",
-    }
-    status_key = _nat2_slow_status(genotypes)
-    if status_key is None:
+    profile = _nat2_profile(genotypes)
+    status_key = profile["status"]
+    if status_key == "unknown":
         return {
             "label": "NAT2 acetylation status",
             "status": "neutral",
             "sub": "NAT2 rs1801280/rs1799930/rs1799931",
             "value": "Unknown",
-            "detail": "Incomplete NAT2 markers; phenotype cannot be inferred.",
+            "detail": (
+                "Incomplete NAT2 markers; phenotype cannot be inferred from this partial panel."
+            ),
             "emoji": _wellness_emoji("detox"),
             "indicator": "Not assessed",
             "evidence": "Clinical PGx",
             "tags": "Isoniazid, hydralazine, sulfasalazine",
             "next_test": "Clinical PGx confirmation if medication relevant",
         }
-    if status_key == "slow":
-        value = "Slow acetylator"
+    if status_key == "likely_slow":
+        value = "Likely slow acetylator (screening-level)"
         status = "risk"
         detail = (
-            "Slow acetylator status may affect isoniazid, hydralazine, sulfasalazine dosing "
-            "and can modulate toxin/carcinogen handling (e.g., smoking-related risk). "
-            "Confirm clinically before medication changes."
+            "Based on three NAT2 tag SNPs; full haplotyping is needed for a clinical "
+            "phenotype. Slow acetylator status may affect isoniazid, hydralazine, "
+            "sulfasalazine dosing and can modulate toxin/carcinogen handling "
+            "(e.g., smoking-related risk). Confirm clinically before medication changes."
         )
-        indicator = "Risk phenotype"
+        indicator = "Likely slow (partial panel)"
+    elif status_key == "indeterminate":
+        value = "Indeterminate (one slow allele detected)"
+        status = "neutral"
+        detail = (
+            "One slow allele detected; NAT2 acetylator status is indeterminate without "
+            "full haplotyping. Confirm clinically if medication is relevant."
+        )
+        indicator = "Indeterminate"
     else:
-        value = "No slow acetylator pattern"
+        value = "No slow alleles detected (screening-level)"
         status = "protective"
-        detail = "No slow acetylator pattern detected from available markers."
-        indicator = "Typical phenotype"
+        detail = (
+            "No slow alleles detected across the partial panel; full NAT2 haplotyping "
+            "is required for definitive phenotype."
+        )
+        indicator = "No slow alleles (partial panel)"
     return {
         "label": "NAT2 acetylation status",
         "status": status,
@@ -967,6 +1022,12 @@ def _wellness_tables(
         "Functional Health - VDR/Bone",
         "Functional Health - Autoimmune",
         "Functional Health - Hormone",
+        "Functional Health - Methylation",
+        "Functional Health - Longevity",
+        "Functional Health - Neuroplasticity",
+        "Functional Health - Oxidative Stress",
+        "Functional Health - Metabolic",
+        "Functional Health - Iron Metabolism",
     ):
         entries = panels.get(panel_name, [])
         summary_row = _panel_summary_row(panel_name, entries, genotypes, variant_lookup)
@@ -1021,7 +1082,11 @@ def _wellness_tables(
     }
 
 
-def _expanded_panels(expanded: dict[str, Any], genotypes: dict[str, str]) -> list[dict[str, Any]]:
+def _expanded_panels(
+    expanded: dict[str, Any],
+    genotypes: dict[str, str],
+    variant_lookup: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     panels_out: list[dict[str, Any]] = []
     panels = expanded.get("panels", {})
     for panel_name, entries in panels.items():
@@ -1030,7 +1095,12 @@ def _expanded_panels(expanded: dict[str, Any], genotypes: dict[str, str]) -> lis
             rsid = entry.get("rsid")
             label = entry.get("label")
             genotype = genotypes.get(rsid, "Not Found")
-            items.append(f"{label} ({rsid}): {genotype}")
+            genotype_display = genotype
+            if variant_lookup and rsid in variant_lookup:
+                match_status = variant_lookup[rsid].get("match_status")
+                if match_status in {"reverse_complement", "mismatch"}:
+                    genotype_display = "Not interpreted (strand caution)"
+            items.append(f"{label} ({rsid}): {genotype_display}")
         panels_out.append({"name": panel_name, "items": items})
     return panels_out
 
@@ -1191,6 +1261,7 @@ def _render_html(
     coverage_notes: list[str],
     *,
     include_trials: bool,
+    research_findings: list[dict[str, str]],
 ) -> str:
     html = template.replace("[filename]", base_name)
     html = html.replace("[date]", date.today().strftime("%B %d, %Y"))
@@ -1277,6 +1348,40 @@ def _render_html(
         coverage_block = ""
     html = html.replace("<!-- Coverage notes inserted here -->", coverage_block)
 
+    if research_findings:
+        research_cards = []
+        for item in research_findings:
+            topic = item.get("topic", "Research Topic")
+            content = item.get("content", "").replace("\n", "<br>")
+            source = item.get("source", "")
+            source_html = f"<div class=\"risk-evidence\" style=\"margin-top: 8px; font-style: italic;\">Source: {source}</div>" if source else ""
+            
+            research_cards.append(
+                "<div class=\"col-full card\">"
+                "<div class=\"card-header\">"
+                f"<h3 class=\"card-title\">{topic}</h3>"
+                "</div>"
+                f"<div class=\"data-row sub-row\" style=\"display: block; padding: 12px;\">{content}{source_html}</div>"
+                "</div>"
+            )
+        
+        research_block = (
+            "<div class=\"section-head\">"
+            "<h2>Research Augmentation (2025/2026 Consensus)</h2>"
+            "<div class=\"section-line\"></div>"
+            "</div>"
+            "<div class=\"dashboard-grid\">"
+            f"{''.join(research_cards)}"
+            "</div>"
+        )
+    else:
+        research_block = ""
+    
+    # We inject research block before the risk cards for visibility
+    # Note: The template doesn't have a specific placeholder for research, so we prepend it to actionable risk placeholder
+    # Or better, let's replace "<!-- Actionable risk cards inserted here -->" with research + actionable block
+    # But since I'm replacing placeholders, I'll just create a new variable for clinical_block and prepend research if needed.
+    
     def card_html(card: dict[str, str]) -> str:
         level = card["level"]
         return (
@@ -1300,7 +1405,10 @@ def _render_html(
     if association_cards:
         association_block = "\n".join(card_html(card) for card in association_cards)
     else:
-        association_block = "<div class=\"col-full card\">No notable lifestyle/association findings detected.</div>"
+        association_block = (
+            "<div class=\"col-full card\">Lifestyle/association findings are summarized "
+            "in the Wellness &amp; Lifestyle section.</div>"
+        )
 
     def table_card(title: str, rows: list[dict[str, str | None]]) -> str:
         inner = []
@@ -1522,7 +1630,7 @@ def _render_html(
     html = html.replace("<!-- Wellness tables inserted here -->", wellness_block)
     html = html.replace("<!-- Expanded panels inserted here -->", expanded_block)
     html = html.replace("<!-- Fun trait cards inserted here -->", "")
-    html = html.replace("<!-- Trials section inserted here -->", trials_block)
+    html = html.replace("<!-- Trials section inserted here -->", research_block + trials_block)
 
     return html
 
@@ -1540,6 +1648,7 @@ def _render_markdown(
     coverage_notes: list[str],
     *,
     include_trials: bool,
+    research_findings: list[dict[str, str]],
 ) -> str:
     lines = []
     lines.append("# Comprehensive DNA Analysis Report")
@@ -1604,7 +1713,7 @@ def _render_markdown(
             lines.append(f"   * **Action:** {card['action']}")
             lines.append("")
     else:
-        lines.append("No notable lifestyle/association findings detected.")
+        lines.append("Lifestyle/association findings are summarized in the Wellness & Lifestyle section.")
     lines.append("\n---\n")
 
     if coverage_notes:
@@ -1683,6 +1792,21 @@ def _render_markdown(
         lines.append("")
     lines.append("\n---\n")
 
+    if research_findings:
+        lines.append(f"## {section}. Research Augmentation (2025/2026 Consensus)")
+        section += 1
+        lines.append("_Automated research summary for high-priority findings._")
+        for item in research_findings:
+            topic = item.get("topic", "Topic")
+            content = item.get("content", "").strip()
+            source = item.get("source", "").strip()
+            lines.append(f"### {topic}")
+            lines.append(content)
+            if source:
+                lines.append(f"\n_Source/Context: {source}_")
+            lines.append("")
+        lines.append("\n---\n")
+
     if include_trials:
         lines.append(f"## {section}. Clinical Trials (Personalized)")
         section += 1
@@ -1745,6 +1869,14 @@ def main() -> int:
     hidden = _load_json(run_dir / "hidden_risks.json")
     expanded = _load_json(run_dir / "expanded_panels.json")
     trials = _load_json(run_dir / "trials_by_finding.json")
+    research_findings = _load_json(run_dir / "research_findings.json")
+    if isinstance(research_findings, list):
+        research_findings = [
+            item for item in research_findings
+            if str(item.get("content", "")).strip()
+        ]
+    else:
+        research_findings = []
 
     clinical = _load_json(Path("data") / "clinical_interpretations.json")
 
@@ -1755,7 +1887,7 @@ def main() -> int:
     variant_lookup = _variant_lookup(variant_verification if isinstance(variant_verification, list) else [])
     risk_cards = _build_risk_cards(genotypes, variant_lookup)
     wellness = _wellness_tables(genotypes, apoe, expanded, summary, variant_lookup)
-    expanded_panels = _expanded_panels(expanded, genotypes)
+    expanded_panels = _expanded_panels(expanded, genotypes, variant_lookup)
     fun_cards = _fun_cards(expanded, genotypes)
     trials_by_finding = _trials_by_finding(trials)
     include_trials = _should_include_trials(risk_cards, trials_by_finding)
@@ -1777,6 +1909,7 @@ def main() -> int:
         demographics_note,
         coverage_notes,
         include_trials=include_trials,
+        research_findings=research_findings if isinstance(research_findings, list) else [],
     )
 
     markdown = _render_markdown(
@@ -1791,6 +1924,7 @@ def main() -> int:
         variant_verification if isinstance(variant_verification, list) else [],
         coverage_notes,
         include_trials=include_trials,
+        research_findings=research_findings if isinstance(research_findings, list) else [],
     )
 
     (run_dir / f"{base_name}_Report.html").write_text(html, encoding="utf-8")

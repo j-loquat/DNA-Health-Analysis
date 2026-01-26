@@ -76,6 +76,12 @@ def check_panels(parquet_path: str, base_name: str) -> None:
         "Functional Health - VDR/Bone",
         "Functional Health - Autoimmune",
         "Functional Health - Hormone",
+        "Functional Health - Methylation",
+        "Functional Health - Longevity",
+        "Functional Health - Neuroplasticity",
+        "Functional Health - Oxidative Stress",
+        "Functional Health - Metabolic",
+        "Functional Health - Iron Metabolism",
     ]
     panels = panels_to_records(reference, panel_names)
 

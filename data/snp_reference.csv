@@ -22,23 +22,23 @@ Sleep & Chronotype,rs1801260,Chronotype (CLOCK),CLOCK,,,,,
 Sleep & Chronotype,rs73598374,Deep sleep (ADA),ADA,,,,,
 Healthy Aging,rs1801133,MTHFR C677T,MTHFR,,,,,
 Healthy Aging,rs1801131,MTHFR A1298C,MTHFR,,,,,
-Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,,,,,
+Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,G,Longevity-associated allele,Typical longevity,,Centenarian studies
 Healthy Aging,rs2282679,Vitamin D (GC),GC,,,,,
 Healthy Aging,rs602662,Vitamin B12 (FUT2),FUT2,,,,,
 Healthy Aging,rs174546,Omega-3 conversion (FADS1),FADS1,,,,,
 Healthy Aging,rs2274924,Magnesium (TRPM6),TRPM6,,,,,
 Healthy Aging,rs1061170,CFH macular degeneration,CFH,,,,,
-Healthy Aging,rs6265,BDNF brain plasticity,BDNF,,,,,
-Healthy Aging,rs9939609,FTO appetite,FTO,,,,,
-Healthy Aging,rs1801394,MTRR A66G,MTRR,,,,,
-Healthy Aging,rs1805087,MTR A2756G,MTR,,,,,
-Healthy Aging,rs234706,CBS C699T,CBS,,,,,
-Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,,,,,
-Healthy Aging,rs4880,SOD2 Ala16Val,SOD2,,,,,
+Healthy Aging,rs6265,BDNF brain plasticity,BDNF,A,Reduced BDNF secretion,Normal BDNF secretion,,Val66Met
+Healthy Aging,rs9939609,FTO appetite,FTO,A,Higher BMI/appetite risk,Normal BMI/appetite risk,,GWAS
+Healthy Aging,rs1801394,MTRR A66G,MTRR,G,Reduced B12 recycling,Normal B12 recycling,,Methylation
+Healthy Aging,rs1805087,MTR A2756G,MTR,G,Reduced homocysteine clearance,Normal homocysteine clearance,,Methylation
+Healthy Aging,rs234706,CBS C699T,CBS,T,Upregulated CBS activity,Normal CBS activity,,Methylation
+Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,G,Longevity-associated allele,Typical longevity,,Centenarian studies
+Healthy Aging,rs4880,SOD2 Ala16Val,SOD2,T,Reduced antioxidant activity,Normal antioxidant activity,,Oxidative Stress
 Hidden Actionable Risks,rs4149056,Statin muscle risk,SLCO1B1,,,,,
 Hidden Actionable Risks,rs4244285,Clopidogrel response,CYP2C19,,,,,
-Hidden Actionable Risks,rs1800562,Hemochromatosis C282Y,HFE,,,,,
-Hidden Actionable Risks,rs1799945,Hemochromatosis H63D,HFE,,,,,
+Hidden Actionable Risks,rs1800562,Hemochromatosis C282Y,HFE,A,Iron overload risk (C282Y),Normal iron metabolism,,High clinical priority
+Hidden Actionable Risks,rs1799945,Hemochromatosis H63D,HFE,G,Iron overload risk (H63D),Normal iron metabolism,,Medium clinical priority
 Hidden Actionable Risks,rs6025,Factor V Leiden,F5,,,,,
 Hidden Actionable Risks,rs1799963,Prothrombin G20210A,F2,,,,,
 Hidden Actionable Risks,rs1333049,9p21 CAD locus,CDKN2A/B,,,,,
@@ -118,3 +118,12 @@ Fun Traits - Sleep,rs1801260,Chronotype (CLOCK),CLOCK,C,Evening preference,Morni
 Fun Traits - Sleep,rs73598374,Sleep depth (ADA),ADA,A,Deeper sleep tendency,Lighter sleep tendency,,Association only
 Fun Traits - Behavior,rs1800497,Reward sensitivity (DRD2/ANKK1),DRD2/ANKK1,T,Higher reward seeking tendency,Lower reward seeking tendency,,Association only
 Fun Traits - Behavior,rs16969968,Nicotine dependence tendency (CHRNA5),CHRNA5,A,Nicotine dependence tendency,Lower nicotine dependence tendency,,Association only
+Functional Health - Methylation,rs1801394,MTRR A66G,MTRR,G,Reduced B12 recycling,Normal B12 recycling,,Methylation
+Functional Health - Methylation,rs1805087,MTR A2756G,MTR,G,Reduced homocysteine clearance,Normal homocysteine clearance,,Methylation
+Functional Health - Methylation,rs234706,CBS C699T,CBS,T,Upregulated CBS activity,Normal CBS activity,,Methylation
+Functional Health - Longevity,rs2802292,FOXO3 longevity,FOXO3,G,Longevity-associated allele,Typical longevity,,Centenarian studies
+Functional Health - Neuroplasticity,rs6265,BDNF brain plasticity,BDNF,A,Reduced BDNF secretion,Normal BDNF secretion,,Val66Met
+Functional Health - Oxidative Stress,rs4880,SOD2 Ala16Val,SOD2,T,Reduced antioxidant activity,Normal antioxidant activity,,Oxidative Stress
+Functional Health - Metabolic,rs9939609,FTO appetite,FTO,A,Higher BMI/appetite risk,Normal BMI/appetite risk,,GWAS
+Functional Health - Iron Metabolism,rs1800562,Hemochromatosis C282Y,HFE,A,Iron overload risk (C282Y),Normal iron metabolism,,High clinical priority
+Functional Health - Iron Metabolism,rs1799945,Hemochromatosis H63D,HFE,G,Iron overload risk (H63D),Normal iron metabolism,,Medium clinical priority

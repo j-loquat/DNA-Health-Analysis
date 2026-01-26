@@ -20,7 +20,7 @@ _VALID_ALLELES = {"A", "C", "G", "T"}
 def _detect_build(input_path: Path) -> dict[str, str | None]:
     build = None
     source_line = None
-    pattern = re.compile(r"(grch\s?3[78]|hg1[89])", re.IGNORECASE)
+    pattern = re.compile(r"(grch\s?3[78]|hg1[89]|build\s*3[78](?:\.\d+)?)", re.IGNORECASE)
     try:
         with input_path.open("r", encoding="utf-8", errors="ignore") as handle:
             for _ in range(200):
@@ -36,7 +36,12 @@ def _detect_build(input_path: Path) -> dict[str, str | None]:
                 if not match:
                     continue
                 token = match.group(1).lower().replace(" ", "")
-                if token in {"grch37", "hg19"}:
+                if token.startswith("build"):
+                    if "37" in token:
+                        build = "GRCh37"
+                    elif "38" in token:
+                        build = "GRCh38"
+                elif token in {"grch37", "hg19"}:
                     build = "GRCh37"
                 elif token in {"grch38", "hg38"}:
                     build = "GRCh38"
