@@ -16,15 +16,16 @@ from typing import Sequence
 from run_utils import resolve_base_name, run_root, update_summary
 
 
-SCRIPT_ORDER: list[tuple[str, str]] = [
-    ("QC", "qc_analysis.py"),
-    ("Core traits", "query_snps.py"),
-    ("Variant verification", "verify_variants.py"),
-    ("Aging/lifestyle", "life_aging_analysis.py"),
-    ("Hidden risks", "check_extra_snps.py"),
-    ("Expanded panels", "additional_panels.py"),
-    ("Clinical trials", "search_trials_for_findings.py"),
-    ("Report", "generate_report.py"),
+SCRIPT_ORDER: list[tuple[str, str, list[str]]] = [
+    ("QC", "qc_analysis.py", []),
+    ("Core traits", "query_snps.py", []),
+    ("Variant verification", "verify_variants.py", []),
+    ("Aging/lifestyle", "life_aging_analysis.py", []),
+    ("Hidden risks", "check_extra_snps.py", []),
+    ("Expanded panels", "additional_panels.py", []),
+    ("Research template", "build_research_findings.py", ["--write-empty"]),
+    ("Clinical trials", "search_trials_for_findings.py", []),
+    ("Report", "generate_report.py", []),
 ]
 
 
@@ -72,6 +73,7 @@ def run_pipeline(
 ) -> None:
     _ensure_input_file(base_name)
     run_dir = run_root(base_name)
+    research_path = run_dir / "research_findings.json"
     update_summary(
         run_dir,
         {
@@ -85,12 +87,15 @@ def run_pipeline(
     if build_gwas:
         _run_command(["uv", "run", "--script", "build_gwas_risk_table.py", build_gwas])
 
-    for label, script in SCRIPT_ORDER:
+    for label, script, extra_args in SCRIPT_ORDER:
         if skip_trials and script == "search_trials_for_findings.py":
             print("Skipping clinical trials search (--skip-trials)")
             continue
+        if script == "build_research_findings.py" and research_path.exists():
+            print("research_findings.json already exists; skipping template generation.")
+            continue
         print(f"\n==> {label}: {script}")
-        _run_command(["uv", "run", "--script", script, base_name])
+        _run_command(["uv", "run", "--script", script, base_name, *extra_args])
 
 
 def main() -> int:
