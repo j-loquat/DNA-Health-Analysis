@@ -160,6 +160,13 @@ def process_dna_file(input_path: str, output_path: str, base_name: str) -> None:
         dup_df = df.group_by("rsid").len().filter(pl.col("len") > 1)
         duplicate_count = dup_df.height
         duplicate_examples = dup_df.select(pl.col("rsid")).head(5).to_series().to_list()
+        non_snp_examples = (
+            df.filter(pl.col("invalid_flag"))
+            .select(pl.col("rsid"))
+            .head(5)
+            .to_series()
+            .to_list()
+        )
 
         # Sex inference
         x_called = df.filter(pl.col("called_flag") & (pl.col("chr_norm") == "X")).height
@@ -191,6 +198,8 @@ def process_dna_file(input_path: str, output_path: str, base_name: str) -> None:
                 "total_snps": total_count,
                 "no_calls": missing_count,
                 "invalid_allele_rows": invalid_count,
+                "non_snp_allele_rows": invalid_count,
+                "non_snp_example_rsids": non_snp_examples,
                 "call_rate_percent": round((called_count) / total_count * 100, 2),
                 "heterozygosity_rate": round(heterozygosity_rate, 4),
                 "ambiguous_snp_count": ambiguous_count,

@@ -14,7 +14,7 @@ from typing import Final
 import polars as pl
 
 from run_utils import (
-    normalize_genotype,
+    classify_genotype,
     resolve_base_name,
     resolve_parquet_path,
     run_root,
@@ -106,10 +106,13 @@ def check_panels(parquet_path: str, base_name: str) -> None:
 
     results = df.filter(pl.col("rsid").is_in(all_targets))
     found: dict[str, str] = {}
+    non_snp: dict[str, str] = {}
     for row in results.iter_rows(named=True):
-        genotype = normalize_genotype(row["allele1"], row["allele2"])
-        if genotype:
-            found[row["rsid"]] = genotype
+        call = classify_genotype(row["allele1"], row["allele2"])
+        if call["kind"] == "acgt" and call["genotype"]:
+            found[row["rsid"]] = call["genotype"]
+        elif call["kind"] == "non_snp" and call["raw"]:
+            non_snp[row["rsid"]] = call["raw"]
 
     print("\n--- EXPANDED PANELS REPORT ---")
     for panel_name in panel_names:
@@ -138,6 +141,7 @@ def check_panels(parquet_path: str, base_name: str) -> None:
         "panels": panels,
         "fun_panels": fun_panels,
         "genotypes": found,
+        "non_snp_genotypes": non_snp,
     }
     write_json(run_dir / "expanded_panels.json", payload)
     update_summary(run_dir, {"expanded_panels_path": str(run_dir / "expanded_panels.json")})

@@ -10,7 +10,7 @@ import sys
 import polars as pl
 
 from run_utils import (
-    normalize_genotype,
+    classify_genotype,
     resolve_base_name,
     resolve_parquet_path,
     run_root,
@@ -29,10 +29,13 @@ def analyze_aging(parquet_path: str, base_name: str) -> None:
     
     results = df.filter(pl.col("rsid").is_in(targets))
     found: dict[str, str] = {}
+    non_snp: dict[str, str] = {}
     for row in results.iter_rows(named=True):
-        genotype = normalize_genotype(row["allele1"], row["allele2"])
-        if genotype:
-            found[row["rsid"]] = genotype
+        call = classify_genotype(row["allele1"], row["allele2"])
+        if call["kind"] == "acgt" and call["genotype"]:
+            found[row["rsid"]] = call["genotype"]
+        elif call["kind"] == "non_snp" and call["raw"]:
+            non_snp[row["rsid"]] = call["raw"]
 
     print("\n--- AGING & LIFESTYLE REPORT ---")
     for entry in records:
@@ -42,7 +45,12 @@ def analyze_aging(parquet_path: str, base_name: str) -> None:
     print("----------------------------\n")
 
     run_dir = run_root(base_name)
-    payload = {"panel": "Healthy Aging", "records": records, "genotypes": found}
+    payload = {
+        "panel": "Healthy Aging",
+        "records": records,
+        "genotypes": found,
+        "non_snp_genotypes": non_snp,
+    }
     write_json(run_dir / "healthy_aging.json", payload)
     update_summary(run_dir, {"healthy_aging_path": str(run_dir / "healthy_aging.json")})
 

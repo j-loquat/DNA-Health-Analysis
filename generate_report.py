@@ -48,6 +48,16 @@ def _merge_genotypes(*payloads: dict[str, Any]) -> dict[str, str]:
     return merged
 
 
+def _merge_non_snp_genotypes(*payloads: dict[str, Any]) -> dict[str, str]:
+    merged: dict[str, str] = {}
+    for payload in payloads:
+        genotypes = payload.get("non_snp_genotypes", {})
+        for rsid, genotype in genotypes.items():
+            if genotype:
+                merged[rsid] = genotype
+    return merged
+
+
 def _has_allele(genotype: str | None, allele: str) -> bool:
     return bool(genotype and allele in genotype)
 
@@ -781,6 +791,7 @@ def _panel_summary_row(
     panel_name: str,
     entries: list[dict[str, Any]],
     genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None,
     variant_lookup: dict[str, dict[str, Any]] | None,
 ) -> dict[str, str | None] | None:
     if not entries:
@@ -789,19 +800,24 @@ def _panel_summary_row(
         return None
     risk_rsids = []
     missing_rsids = []
+    non_snp_calls: dict[str, str] = {}
+    non_snp_genotypes = non_snp_genotypes or {}
     for entry in entries:
         rsid = entry.get("rsid", "")
         effect_allele = entry.get("effect_allele") or ""
         genotype = genotypes.get(rsid)
         if not genotype:
-            missing_rsids.append(rsid)
+            if rsid in non_snp_genotypes:
+                non_snp_calls[rsid] = non_snp_genotypes[rsid]
+            else:
+                missing_rsids.append(rsid)
             continue
         if effect_allele and _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
             risk_rsids.append(rsid)
     if risk_rsids:
         status = "risk"
         summary_value = "Risk marker present"
-    elif missing_rsids:
+    elif missing_rsids or non_snp_calls:
         status = "missing"
         summary_value = "Incomplete screen"
     else:
@@ -813,6 +829,9 @@ def _panel_summary_row(
         detail_parts.append(f"Risk markers: {', '.join(risk_rsids)}")
     if missing_rsids:
         detail_parts.append(f"Missing markers: {', '.join(missing_rsids)}")
+    if non_snp_calls:
+        calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_calls.items())
+        detail_parts.append(f"Non-SNP calls: {calls}")
     detail = "; ".join(detail_parts) if detail_parts else None
 
     return {
@@ -831,6 +850,7 @@ def _panel_summary_row(
 def _panel_rows(
     entries: list[dict[str, Any]],
     genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None = None,
     *,
     prefer_conclusion: bool = False,
     panel_name: str | None = None,
@@ -842,6 +862,9 @@ def _panel_rows(
         rsid = entry.get("rsid", "")
         label = entry.get("label", "Trait")
         genotype = genotypes.get(rsid)
+        non_snp_call = None
+        if not genotype and non_snp_genotypes:
+            non_snp_call = non_snp_genotypes.get(rsid)
         effect_allele = entry.get("effect_allele") or ""
         effect_trait = entry.get("effect_trait") or ""
         non_effect_trait = entry.get("non_effect_trait") or ""
@@ -866,9 +889,16 @@ def _panel_rows(
             next_test = _next_test_for_entry(rsid, panel_name)
 
         if not genotype:
-            value = "Not assessed"
-            status = "missing"
-            indicator = "Not assessed"
+            if non_snp_call:
+                value = "Not assessed (non-SNP call)"
+                status = "missing"
+                if include_indicators:
+                    indicator = "Non-SNP call"
+                detail = f"Non-SNP call observed: {non_snp_call}. Indel/repeat not interpreted."
+            else:
+                value = "Not assessed"
+                status = "missing"
+                indicator = "Not assessed"
         elif effect_allele and (effect_trait or non_effect_trait):
             allele_count = sum(1 for allele in genotype if allele == effect_allele)
             risk_present = _risk_allele_present(rsid, genotype, effect_allele, variant_lookup)
@@ -917,8 +947,10 @@ def _panel_rows(
             detail_lines.append("If symptoms persist despite no risk allele, consider clinical evaluation.")
         if notes and genotype and "proxy" in notes.lower():
             detail_lines.append(notes)
-        if notes and "verify strand" in notes.lower():
+        if notes and genotype and "verify strand" in notes.lower():
             detail_lines.append("Strand caution: verify orientation before interpreting.")
+        if non_snp_call and notes and any(term in notes.lower() for term in ("indel", "repeat")):
+            detail_lines.append(notes)
 
         detail = " ".join(detail_lines) if detail_lines else None
 
@@ -944,7 +976,7 @@ def _panel_rows(
         rows.append({
             "label": label,
             "status": status,
-            "sub": f"{rsid} {genotype or 'Not Found'}",
+            "sub": f"{rsid} {genotype or non_snp_call or 'Not Found'}",
             "value": value,
             "detail": detail,
             "emoji": _wellness_emoji(label),
@@ -959,40 +991,56 @@ def _panel_rows(
 def _hidden_screening_rows(
     hidden: dict[str, Any],
     genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None,
     variant_lookup: dict[str, dict[str, Any]] | None,
     *,
     sex: str | None,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     records = hidden.get("records", [])
+    non_snp_genotypes = non_snp_genotypes or {}
     for entry in records:
         rsid = entry.get("rsid", "")
         if not rsid:
             continue
         genotype = genotypes.get(rsid)
+        non_snp_call = None
         if not genotype:
+            non_snp_call = non_snp_genotypes.get(rsid)
+        if not genotype and not non_snp_call:
             continue
         effect_allele = entry.get("effect_allele") or ""
-        if not effect_allele:
-            continue
-        if _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
-            continue
         label = entry.get("label", "Risk marker")
-        non_effect = entry.get("non_effect_trait") or "No risk allele detected"
         note = ""
+        if genotype:
+            if not effect_allele:
+                continue
+            if _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
+                continue
+            value = entry.get("non_effect_trait") or "No risk allele detected"
+            status = "protective"
+            sub_value = genotype
+        else:
+            value = "Not assessed (non-SNP call)"
+            status = "missing"
+            sub_value = non_snp_call or "Not Found"
+            note = "Indel/repeat call observed; not interpreted."
+
         if rsid in {"rs1050828", "rs1050829"}:
             if sex == "male":
-                note = "X-linked; male results are typically more predictive."
+                sex_note = "X-linked; male results are typically more predictive."
             elif sex == "female":
-                note = "X-linked; females may be carriers or affected depending on X-inactivation."
+                sex_note = "X-linked; females may be carriers or affected depending on X-inactivation."
             else:
-                note = "X-linked; sex not specified, interpret cautiously."
+                sex_note = "X-linked; sex not specified, interpret cautiously."
+            note = f"{note} {sex_note}".strip() if note else sex_note
         rows.append(
             {
                 "label": label,
-                "value": non_effect,
-                "sub": f"{rsid} {genotype}",
+                "value": value,
+                "sub": f"{rsid} {sub_value}",
                 "note": note,
+                "status": status,
             }
         )
     return rows
@@ -1023,7 +1071,10 @@ def _demographics_notice(summary: dict[str, Any]) -> str | None:
     return f"Demographics missing: {items}. Provide them to enable hormone-related or age-stratified notes."
 
 
-def _coverage_notes(genotypes: dict[str, str]) -> list[str]:
+def _coverage_notes(
+    genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str],
+) -> list[str]:
     critical = [
         {"label": "APOE haplotype", "rsids": ["rs429358", "rs7412"], "proxy": None},
         {"label": "CYP2C19*2 (clopidogrel)", "rsids": ["rs4244285"], "proxy": None},
@@ -1093,21 +1144,55 @@ def _coverage_notes(genotypes: dict[str, str]) -> list[str]:
     for entry in critical:
         rsids = entry["rsids"]
         present = [rsid for rsid in rsids if rsid in genotypes]
-        missing = [rsid for rsid in rsids if rsid not in genotypes]
-        if not present:
+        non_snp_present = {
+            rsid: non_snp_genotypes[rsid]
+            for rsid in rsids
+            if rsid in non_snp_genotypes
+        }
+        missing = [
+            rsid
+            for rsid in rsids
+            if rsid not in genotypes and rsid not in non_snp_genotypes
+        ]
+
+        if not present and not non_snp_present:
             notes.append(f"Not assessed: {entry['label']} (missing {', '.join(missing)})")
             continue
-        if missing:
+
+        if present:
+            if missing or non_snp_present:
+                parts = []
+                if present:
+                    parts.append(f"present {', '.join(present)}")
+                if missing:
+                    parts.append(f"missing {', '.join(missing)}")
+                if non_snp_present:
+                    calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_present.items())
+                    parts.append(f"non-SNP calls {calls}")
+                note = f"Partial coverage: {entry['label']} ({'; '.join(parts)})."
+                if entry["proxy"]:
+                    note = f"{note} {entry['proxy']}"
+                notes.append(note)
+                continue
+            if entry["proxy"]:
+                notes.append(f"Note: {entry['label']} - {entry['proxy']}")
+            continue
+
+        if non_snp_present and not missing:
+            calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_present.items())
+            notes.append(
+                f"Non-SNP call present: {entry['label']} ({calls}). Indel/repeat not interpreted."
+            )
+            continue
+        if non_snp_present and missing:
+            calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_present.items())
             note = (
                 f"Partial coverage: {entry['label']} "
-                f"(present {', '.join(present)}; missing {', '.join(missing)})."
+                f"(non-SNP calls {calls}; missing {', '.join(missing)})."
             )
             if entry["proxy"]:
                 note = f"{note} {entry['proxy']}"
             notes.append(note)
-            continue
-        if entry["proxy"]:
-            notes.append(f"Note: {entry['label']} - {entry['proxy']}")
     return notes
 
 
@@ -1196,6 +1281,7 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
 
 def _wellness_tables(
     genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None,
     apoe: str,
     expanded: dict[str, Any],
     summary: dict[str, Any],
@@ -1319,13 +1405,14 @@ def _wellness_tables(
         "Functional Health - Iron Metabolism",
     ):
         entries = panels.get(panel_name, [])
-        summary_row = _panel_summary_row(panel_name, entries, genotypes, variant_lookup)
+        summary_row = _panel_summary_row(panel_name, entries, genotypes, non_snp_genotypes, variant_lookup)
         if summary_row:
             functional_rows.append(summary_row)
         functional_rows.extend(
             _panel_rows(
                 entries,
                 genotypes,
+                non_snp_genotypes,
                 prefer_conclusion=(panel_name == "Functional Health - Histamine"),
                 panel_name=panel_name,
                 variant_lookup=variant_lookup,
@@ -1337,6 +1424,7 @@ def _wellness_tables(
     lifestyle_rows = _panel_rows(
         panels.get("Lifestyle", []),
         genotypes,
+        non_snp_genotypes,
         prefer_conclusion=True,
         panel_name="Lifestyle",
     )
@@ -1360,8 +1448,24 @@ def _wellness_tables(
     met_fun_entries = [fun_by_rsid[rsid] for rsid in metabolism_fun_rsids if rsid in fun_by_rsid]
     fit_fun_entries = [fun_by_rsid[rsid] for rsid in fitness_fun_rsids if rsid in fun_by_rsid]
 
-    met_rows.extend(_panel_rows(met_fun_entries, genotypes, prefer_conclusion=True, panel_name="Metabolism & Diet"))
-    fit_rows.extend(_panel_rows(fit_fun_entries, genotypes, prefer_conclusion=True, panel_name="Fitness & Aging"))
+    met_rows.extend(
+        _panel_rows(
+            met_fun_entries,
+            genotypes,
+            non_snp_genotypes,
+            prefer_conclusion=True,
+            panel_name="Metabolism & Diet",
+        )
+    )
+    fit_rows.extend(
+        _panel_rows(
+            fit_fun_entries,
+            genotypes,
+            non_snp_genotypes,
+            prefer_conclusion=True,
+            panel_name="Fitness & Aging",
+        )
+    )
 
     return {
         "metabolism": met_rows,
@@ -1374,6 +1478,7 @@ def _wellness_tables(
 def _expanded_panels(
     expanded: dict[str, Any],
     genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None = None,
     variant_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     partial_groups = [
@@ -1382,6 +1487,7 @@ def _expanded_panels(
         {"name": "HLA-B*15:02 proxies", "rsids": {"rs2844682", "rs3909184"}},
     ]
     partial_rsids: set[str] = set()
+    non_snp_genotypes = non_snp_genotypes or {}
     for group in partial_groups:
         rsids = group["rsids"]
         present = [rsid for rsid in rsids if rsid in genotypes]
@@ -1396,9 +1502,15 @@ def _expanded_panels(
         for entry in entries:
             rsid = entry.get("rsid")
             label = entry.get("label")
-            genotype = genotypes.get(rsid, "Not Found")
-            genotype_display = genotype
-            if variant_lookup and rsid in variant_lookup:
+            genotype = genotypes.get(rsid)
+            non_snp_call = non_snp_genotypes.get(rsid)
+            if genotype:
+                genotype_display = genotype
+            elif non_snp_call:
+                genotype_display = f"{non_snp_call} (non-SNP call)"
+            else:
+                genotype_display = "Not Found"
+            if genotype and variant_lookup and rsid in variant_lookup:
                 match_status = variant_lookup[rsid].get("match_status")
                 if match_status in {"reverse_complement", "mismatch"}:
                     genotype_display = "Not interpreted (strand caution)"
@@ -1634,16 +1746,17 @@ def _render_html(
     if hidden_screening:
         rows = [
             "<div class=\"data-row sub-row\">"
-            "<div class=\"data-label\">Screening only; absence is not diagnostic.</div>"
+            "<div class=\"data-label\">Screening only; absence is not diagnostic. Non-SNP calls are listed as not assessed.</div>"
             "<div class=\"data-val\"></div>"
             "</div>"
         ]
         for row in hidden_screening:
+            status = row.get("status", "protective")
             rows.append(
                 "<div class=\"data-row\">"
                 f"<div class=\"data-label\">{row['label']}</div>"
                 "<div class=\"data-val\">"
-                f"<span class=\"status-pill status-protective\">{row['value']}</span>"
+                f"<span class=\"status-pill status-{status}\">{row['value']}</span>"
                 f"<span class=\"data-sub\">{row['sub']}</span>"
                 "</div></div>"
             )
@@ -2064,7 +2177,10 @@ def _render_markdown(
     if hidden_screening:
         lines.append(f"## {section}. Hidden Actionable Risks (Screening)")
         section += 1
-        lines.append("_Markers assessed with no risk allele detected. Screening only; absence is not diagnostic._")
+        lines.append(
+            "_Markers assessed with no risk allele detected or non-SNP calls noted. "
+            "Screening only; absence is not diagnostic._"
+        )
         for row in hidden_screening:
             lines.append(f"* {row['label']}: {row['value']} ({row['sub']})")
             if row.get("note"):
@@ -2237,20 +2353,27 @@ def main() -> int:
     clinical = _load_json(Path("data") / "clinical_interpretations.json")
 
     genotypes = _merge_genotypes(core_traits, healthy, hidden, expanded)
+    non_snp_genotypes = _merge_non_snp_genotypes(core_traits, healthy, hidden, expanded)
     apoe = _apoe_haplotype(genotypes, clinical)
 
     variant_verification = _load_json(run_dir / "variant_verification.json")
     variant_lookup = _variant_lookup(variant_verification if isinstance(variant_verification, list) else [])
     normalized_sex = _normalize_sex(summary)
     risk_cards = _build_risk_cards(genotypes, variant_lookup, sex=normalized_sex)
-    hidden_screening = _hidden_screening_rows(hidden, genotypes, variant_lookup, sex=normalized_sex)
-    wellness = _wellness_tables(genotypes, apoe, expanded, summary, variant_lookup)
-    expanded_panels = _expanded_panels(expanded, genotypes, variant_lookup)
+    hidden_screening = _hidden_screening_rows(
+        hidden,
+        genotypes,
+        non_snp_genotypes,
+        variant_lookup,
+        sex=normalized_sex,
+    )
+    wellness = _wellness_tables(genotypes, non_snp_genotypes, apoe, expanded, summary, variant_lookup)
+    expanded_panels = _expanded_panels(expanded, genotypes, non_snp_genotypes, variant_lookup)
     fun_cards = _fun_cards(expanded, genotypes)
     trials_by_finding = _trials_by_finding(trials)
     include_trials = _should_include_trials(risk_cards, trials_by_finding)
     # variant_verification loaded above for allele orientation checks
-    coverage_notes = _coverage_notes(genotypes)
+    coverage_notes = _coverage_notes(genotypes, non_snp_genotypes)
     demographics_note = _demographics_notice(summary)
 
     template = Path("report_template.html").read_text(encoding="utf-8")

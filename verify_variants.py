@@ -19,6 +19,7 @@ import polars as pl
 import requests
 
 from snp_reference import load_reference
+from run_utils import classify_genotype
 
 ENSEMBL_GRCH37 = "https://grch37.rest.ensembl.org"
 REQUEST_TIMEOUT = (5, 10)
@@ -26,6 +27,19 @@ MAX_RETRIES = 3
 GWAS_RISK_PATH = Path(__file__).resolve().parent / "data" / "gwas_risk_alleles.json"
 _GWAS_RISK_CACHE: dict[str, str | None] | None = None
 _REFERENCE_RISK_CACHE: dict[str, str] | None = None
+_PROXY_NOTES: dict[str, str] = {
+    "rs2395029": "Proxy marker for HLA-B*57:01.",
+    "rs4349859": "Proxy marker for HLA-B*27.",
+    "rs2844682": "Proxy marker for HLA-B*15:02.",
+    "rs3909184": "Proxy marker for HLA-B*15:02.",
+    "rs1061235": "Proxy marker for HLA-A*31:01.",
+    "rs9263726": "Proxy marker for HLA-B*58:01.",
+    "rs887829": "Proxy marker for UGT1A1*28.",
+}
+
+
+def _proxy_note(rsid: str) -> str | None:
+    return _PROXY_NOTES.get(rsid)
 
 
 @dataclass(frozen=True)
@@ -38,6 +52,7 @@ class VariantVerification:
     match_status: str
     gwas_risk_allele: str | None
     note: str | None
+    proxy_note: str | None
 
 
 class EnsemblCacheEntry(TypedDict):
@@ -197,14 +212,36 @@ def verify_variants(
     df = pl.read_parquet(parquet_path)
     results = df.filter(pl.col("rsid").is_in(rsids))
     observed_map: dict[str, str | None] = {}
+    non_snp_map: dict[str, str] = {}
     for row in results.iter_rows(named=True):
-        genotype = _normalize_genotype(row["allele1"], row["allele2"])
-        observed_map[row["rsid"]] = genotype
+        call = classify_genotype(row["allele1"], row["allele2"])
+        if call["kind"] == "acgt":
+            observed_map[row["rsid"]] = call["genotype"]
+        elif call["kind"] == "non_snp" and call["raw"]:
+            non_snp_map[row["rsid"]] = call["raw"]
 
     verifications: list[VariantVerification] = []
     cache = _load_cache(cache_path)
     session = requests.Session()
     for rsid in rsids:
+        proxy_note = _proxy_note(rsid)
+        if rsid in non_snp_map:
+            allele_string, strand = fetch_ensembl_alleles(session, cache, rsid)
+            note = "Non-SNP allele call (indel/repeat); not validated by allele orientation."
+            verifications.append(
+                VariantVerification(
+                    rsid=rsid,
+                    observed_genotype=non_snp_map.get(rsid),
+                    observed_alleles=non_snp_map.get(rsid),
+                    ensembl_alleles=allele_string,
+                    ensembl_strand=strand,
+                    match_status="non_snp",
+                    gwas_risk_allele=None,
+                    note=note,
+                    proxy_note=proxy_note,
+                )
+            )
+            continue
         genotype = observed_map.get(rsid)
         if not genotype:
             verifications.append(
@@ -217,6 +254,7 @@ def verify_variants(
                     match_status="missing_in_file",
                     gwas_risk_allele=None,
                     note=None,
+                    proxy_note=proxy_note,
                 )
             )
             continue
@@ -254,6 +292,7 @@ def verify_variants(
                 match_status=match_status,
                 gwas_risk_allele=gwas_risk,
                 note=note,
+                proxy_note=proxy_note,
             )
         )
         time.sleep(0.1)

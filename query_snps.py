@@ -13,7 +13,7 @@ from typing import Final
 import polars as pl
 
 from run_utils import (
-    normalize_genotype,
+    classify_genotype,
     resolve_base_name,
     resolve_parquet_path,
     run_root,
@@ -52,11 +52,14 @@ def query_core_traits(parquet_path: str, base_name: str) -> None:
     results = df.filter(pl.col("rsid").is_in(target_snps))
 
     found_snps: dict[str, str] = {}
+    non_snp: dict[str, str] = {}
     for row in results.iter_rows(named=True):
         rsid = row["rsid"]
-        genotype = normalize_genotype(row["allele1"], row["allele2"])
-        if genotype:
-            found_snps[rsid] = genotype
+        call = classify_genotype(row["allele1"], row["allele2"])
+        if call["kind"] == "acgt" and call["genotype"]:
+            found_snps[rsid] = call["genotype"]
+        elif call["kind"] == "non_snp" and call["raw"]:
+            non_snp[rsid] = call["raw"]
 
     print("\n--- CORE WELLNESS AND LIFESTYLE REPORT ---")
     # Note: Genotypes are sorted alphabetical (e.g., AG, not GA)
@@ -78,7 +81,7 @@ def query_core_traits(parquet_path: str, base_name: str) -> None:
     print("----------------------------\n")
 
     run_dir = run_root(base_name)
-    payload = {"panels": panels, "genotypes": found_snps}
+    payload = {"panels": panels, "genotypes": found_snps, "non_snp_genotypes": non_snp}
     write_json(run_dir / "core_traits.json", payload)
     update_summary(run_dir, {"core_traits_path": str(run_dir / "core_traits.json")})
 
