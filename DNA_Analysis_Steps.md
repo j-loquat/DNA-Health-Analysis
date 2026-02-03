@@ -90,6 +90,7 @@ This document captures the exact steps, scripts (you may need to create), and sk
     *   `rs174546` (Omega-3 Conversion - FADS1) **[NEW]**
     *   `rs2274924` (Magnesium Absorption - TRPM6) **[NEW]**
     *   `rs1061170` (CFH - Macular Degeneration risk)
+    *   `rs10490924` (ARMS2 - Macular Degeneration risk) **[NEW]**
     *   `rs6265` (BDNF - Brain plasticity/Exercise response)
     *   `rs9939609` (FTO - Appetite)
 
@@ -105,6 +106,15 @@ This document captures the exact steps, scripts (you may need to create), and sk
     *   `rs1799963` (Prothrombin G20210A - Clotting Risk) **[NEW]**
     *   `rs1333049` (9p21 - Early Heart Attack locus)
     *   `rs3798220` (LPA - Lipoprotein(a) heart risk) **[NEW]**
+    *   `rs334` (HBB - Sickle cell trait/disease) **[NEW]**
+    *   `rs113993960` (CFTR F508del - Cystic fibrosis carrier) **[NEW]**
+    *   `rs28929474` + `rs17580` (SERPINA1 - Alpha-1 antitrypsin deficiency) **[NEW]**
+    *   `rs1050828` + `rs1050829` (G6PD deficiency markers) **[NEW]**
+    *   `rs5742904` (APOB R3500Q - Familial hypercholesterolemia) **[NEW]**
+    *   `rs1801155` (APC I1307K - Colorectal cancer risk allele) **[NEW]**
+    *   `rs17879961` (CHEK2 I157T - Moderate cancer risk allele) **[NEW]**
+    *   `rs80357906` (BRCA1 5382insC founder) **[NEW]**
+    *   `rs80359550` (BRCA2 6174delT founder) **[NEW]**
 
 ## Step 5b: Structural & Functional Lifestyle
 **Goal:** Add structural health, injury risk, targeted diet sensitivities, celiac risk tags, and sleep/chronotype.
@@ -155,14 +165,33 @@ This document captures the exact steps, scripts (you may need to create), and sk
         * `rs9923231` (VKORC1 - Warfarin sensitivity)
         * `rs1799853` (CYP2C9*2 - Warfarin/NSAIDs)
         * `rs1057910` (CYP2C9*3 - Warfarin/NSAIDs)
+        * `rs2108622` (CYP4F2*3 - Warfarin dose modifier) **[NEW]**
+        * `rs12777823` (Warfarin ancestry modifier) **[NEW]**
+        * `rs28371686` (CYP2C9*5) **[NEW]**
+        * `rs9332131` (CYP2C9*6 indel) **[NEW]**
+        * `rs7900194` (CYP2C9*8) **[NEW]**
+        * `rs28371685` (CYP2C9*11) **[NEW]**
         * `rs1800460` (TPMT*3B - Thiopurines)
+        * `rs1800462` (TPMT*2 - Thiopurines) **[NEW]**
         * `rs1142345` (TPMT*3C - Thiopurines)
         * `rs116855232` (NUDT15 - Thiopurines)
         * `rs2395029` (HLA-B*57:01 proxy - Abacavir)
         * `rs3918290` (DPYD*2A - Fluoropyrimidines)
+        * `rs2231142` (ABCG2 Q141K - Statin exposure) **[NEW]**
+        * `rs2306283` (SLCO1B1 388A>G - Haplotype support) **[NEW]**
+        * `rs887829` (UGT1A1*28 proxy - Bilirubin risk) **[NEW]**
+        * `rs8175347` (UGT1A1*28 TA repeat) **[NEW]**
+        * `rs2844682` + `rs3909184` (HLA-B*15:02 proxy - Carbamazepine) **[NEW]**
+        * `rs1061235` (HLA-A*31:01 proxy - Carbamazepine) **[NEW]**
+        * `rs9263726` (HLA-B*58:01 proxy - Allopurinol) **[NEW]**
     * **CYP2D6 Risk Factors**
         * `rs1065852` (CYP2D6*10 - Risk factor only)
         * `rs3892097` (CYP2D6*4 - Risk factor only)
+        * `rs16947` (CYP2D6*2 tag) **[NEW]**
+        * `rs1135840` (CYP2D6*2 tag) **[NEW]**
+        * `rs28371725` (CYP2D6*41 tag) **[NEW]**
+        * `rs35742686` (CYP2D6*3 indel) **[NEW]**
+        * `rs5030655` (CYP2D6*6 indel) **[NEW]**
     * **Lifestyle**
         * `rs1229984` (ADH1B - Alcohol metabolism)
         * `rs16969968` (CHRNA5 - Nicotine dependence)
@@ -210,10 +239,12 @@ This document captures the exact steps, scripts (you may need to create), and sk
 **Interpretation Notes (use in reports):**
 - **GWAS/common risk loci (e.g., cancer, many cardiometabolic markers):** Low effect sizes; not diagnostic. Use to contextualize risk, not to make clinical decisions.
 - **Pharmacogenomics:** Actionable only when **clinical-grade PGx** testing confirms genotype and phenotype (e.g., warfarin dosing, thiopurines, DPYD, HLA-B*57:01).
+- **HLA proxies:** Tag SNPs (e.g., HLA-B*15:02, HLA-A*31:01, HLA-B*58:01) are ancestry-dependent proxies; confirm with clinical HLA typing.
 - **CYP2D6:** Do not assign metabolizer phenotype from array data; CNVs drive poor/ultra-rapid status and are not captured.
 - **NAT2:** Use rs1801280/rs1799930/rs1799931 as a **partial panel**. If any marker is missing, report “unknown.” If all three are present, **≥2 slow alleles = likely slow acetylator (screening-level)**; 1 slow allele = indeterminate without full haplotyping. Highlight drug dosing/toxin-exposure relevance but require clinical confirmation.
 - **Lifestyle/behavior markers:** Often ancestry-dependent and environment-modulated; treat as informational, not prescriptive.
 - **Fun Traits & Appearance:** Use the report's friendly association text + short evidence note; always include "This is not medical advice."
+- **Indels/repeats:** Some markers (e.g., BRCA founders, CFTR F508del, UGT1A1*28) are indels or repeats and may not be callable from array data; treat as not assessed.
 
 ## Step 7: Research Augmentation (Agent Task)
 **Goal:** Find the latest (2024-2026) consensus on handling the specific genotypes found.

@@ -5,6 +5,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+_VALID_BASES = {"A", "C", "G", "T"}
+
 
 def resolve_base_name(arg: str | None, default: str = "ancestrydna-test-file") -> str:
     if not arg:
@@ -30,6 +32,23 @@ def resolve_parquet_path(base_name: str) -> Path:
 
 def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def normalize_genotype(allele1: str | None, allele2: str | None) -> str | None:
+    """Normalize a diploid genotype to sorted A/C/G/T pairs.
+
+    Returns None for missing or non-ACGT calls (including indels), so callers
+    can label the marker as not assessed rather than misinterpreting.
+    """
+    a1 = (allele1 or "").strip().upper()
+    a2 = (allele2 or "").strip().upper()
+    if not a1 or not a2:
+        return None
+    if a1 in {"0", "--"} or a2 in {"0", "--"}:
+        return None
+    if a1 not in _VALID_BASES or a2 not in _VALID_BASES:
+        return None
+    return "".join(sorted([a1, a2]))
 
 
 def load_summary(root: Path) -> dict[str, Any]:

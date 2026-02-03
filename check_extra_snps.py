@@ -9,7 +9,14 @@ import sys
 
 import polars as pl
 
-from run_utils import resolve_base_name, resolve_parquet_path, run_root, update_summary, write_json
+from run_utils import (
+    normalize_genotype,
+    resolve_base_name,
+    resolve_parquet_path,
+    run_root,
+    update_summary,
+    write_json,
+)
 from snp_reference import load_reference, panel_records
 
 def check_risks(parquet_path: str, base_name: str) -> None:
@@ -21,9 +28,11 @@ def check_risks(parquet_path: str, base_name: str) -> None:
     targets = [row["rsid"] for row in records]
     
     results = df.filter(pl.col("rsid").is_in(targets))
-    found = {}
+    found: dict[str, str] = {}
     for row in results.iter_rows(named=True):
-        found[row['rsid']] = "".join(sorted([row['allele1'], row['allele2']]))
+        genotype = normalize_genotype(row["allele1"], row["allele2"])
+        if genotype:
+            found[row["rsid"]] = genotype
 
     print("\n--- HIDDEN RISKS REPORT ---")
     for entry in records:

@@ -127,3 +127,35 @@ Functional Health - Oxidative Stress,rs4880,SOD2 Ala16Val,SOD2,T,Reduced antioxi
 Functional Health - Metabolic,rs9939609,FTO appetite,FTO,A,Higher BMI/appetite risk,Normal BMI/appetite risk,,GWAS
 Functional Health - Iron Metabolism,rs1800562,Hemochromatosis C282Y,HFE,A,Iron overload risk (C282Y),Normal iron metabolism,,High clinical priority
 Functional Health - Iron Metabolism,rs1799945,Hemochromatosis H63D,HFE,G,Iron overload risk (H63D),Normal iron metabolism,,Medium clinical priority
+Hidden Actionable Risks,rs334,Sickle cell (HbS),HBB,T,HbS variant detected (carrier or disease risk),No HbS variant detected,ClinVar,Confirm with clinical testing; carrier screening only.
+Hidden Actionable Risks,rs113993960,CFTR F508del,CFTR,,,,ClinVar,Indel; may not be callable on arrays. Negative result is not reassuring.
+Hidden Actionable Risks,rs28929474,SERPINA1 Pi*Z (AAT deficiency),SERPINA1,A,Pi*Z allele detected (AAT deficiency risk),No Pi*Z allele detected,ClinVar,Interpret genotype combinations (MZ/ZZ). Confirm clinically.
+Hidden Actionable Risks,rs17580,SERPINA1 Pi*S (AAT deficiency modifier),SERPINA1,T,Pi*S allele detected (modifier),No Pi*S allele detected,ClinVar,Low-penetrance alone; higher risk with Pi*Z. Confirm clinically.
+Hidden Actionable Risks,rs1050828,G6PD c.202G>A,G6PD,A,G6PD deficiency risk allele detected,No risk allele detected,ClinVar,X-linked; risk depends on sex and haplotype. Confirm clinically.
+Hidden Actionable Risks,rs1050829,G6PD c.376A>G,G6PD,G,G6PD A+ allele detected (modifier),No modifier detected,ClinVar,Interpret with rs1050828 haplotype context.
+Hidden Actionable Risks,rs5742904,APOB R3500Q (familial hypercholesterolemia),APOB,A,Pathogenic APOB variant detected,No variant detected,ClinVar,Founder variant; confirm clinically. Absence is not reassuring.
+Hidden Actionable Risks,rs80357906,BRCA1 5382insC,BRCA1,,,,ClinVar,Founder frameshift; indel not reliably called on arrays. Negative result is not reassuring.
+Hidden Actionable Risks,rs80359550,BRCA2 6174delT,BRCA2,,,,ClinVar,Founder frameshift; indel not reliably called on arrays. Negative result is not reassuring.
+Hidden Actionable Risks,rs1801155,APC I1307K,APC,A,APC I1307K risk allele detected,No I1307K allele detected,ClinVar,Enriched in Ashkenazi Jewish ancestry; confirm clinically.
+Hidden Actionable Risks,rs17879961,CHEK2 I157T,CHEK2,C,Moderate-risk CHEK2 allele detected,No risk allele detected,ClinVar,Low-penetrance risk allele; confirm clinically.
+Pharmacogenomics,rs2108622,CYP4F2*3 (warfarin dose),CYP4F2,T,Higher warfarin dose requirement (CYP4F2*3),Typical warfarin dose requirement,CPIC warfarin guideline,"Dose modifier; more relevant in non-African ancestry."
+Pharmacogenomics,rs12777823,CYP2C cluster warfarin modifier,CYP2C cluster,A,Lower warfarin dose requirement (ancestry modifier),No modifier detected,Warfarin PGx literature,"Best supported in African ancestry; interpret with caution."
+Pharmacogenomics,rs28371686,CYP2C9*5,CYP2C9,G,Reduced function allele.,Normal function allele.,NCBI Bookshelf CYP2C9 allele table,Ancestry-enriched; use with CPIC guidance.
+Pharmacogenomics,rs9332131,CYP2C9*6,CYP2C9,,,,NCBI Bookshelf CYP2C9 allele table,Frameshift deletion; indel not reliably called on arrays.
+Pharmacogenomics,rs7900194,CYP2C9*8,CYP2C9,A,Reduced function allele.,Normal function allele.,NCBI Bookshelf CYP2C9 allele table,Ancestry-enriched; use with CPIC guidance.
+Pharmacogenomics,rs28371685,CYP2C9*11,CYP2C9,T,Reduced function allele.,Normal function allele.,NCBI Bookshelf CYP2C9 allele table,Ancestry-enriched; use with CPIC guidance.
+Pharmacogenomics,rs2231142,ABCG2 Q141K,ABCG2,A,Reduced transporter function allele.,Normal function allele.,ABCG2 c.421C>A literature,Statin exposure modifier; use with CPIC guidance where available.
+Pharmacogenomics,rs2306283,SLCO1B1 388A>G,SLCO1B1,,,,,Haplotype support for SLCO1B1; interpret with rs4149056.
+Pharmacogenomics,rs1800462,TPMT*2,TPMT,C,Reduced TPMT function allele.,Normal function allele.,NCBI Bookshelf TPMT allele table,Thiopurine dosing requires clinical confirmation.
+Pharmacogenomics,rs887829,UGT1A1*28 proxy,UGT1A1,T,Reduced UGT1A1 expression; higher bilirubin risk,Normal UGT1A1 expression,UGT1A1 rs887829 literature,Proxy for UGT1A1*28; interpret with caution.
+Pharmacogenomics,rs8175347,UGT1A1*28 (TA repeat),UGT1A1,,,,NCBI Bookshelf UGT1A1 references,TA repeat; indel/repeat not reliably called on arrays.
+Pharmacogenomics,rs2844682,HLA-B*15:02 proxy,HLA-B,,,,NCBI Bookshelf carbamazepine guidance,"Proxy tag for HLA-B*15:02; ancestry-dependent; confirm with clinical HLA typing."
+Pharmacogenomics,rs3909184,HLA-B*15:02 proxy,HLA-B,,,,NCBI Bookshelf carbamazepine guidance,"Proxy tag for HLA-B*15:02; ancestry-dependent; confirm with clinical HLA typing."
+Pharmacogenomics,rs1061235,HLA-A*31:01 proxy,HLA-A,,,,NCBI Bookshelf carbamazepine guidance,"Proxy tag for HLA-A*31:01; ancestry-dependent; confirm with clinical HLA typing."
+Pharmacogenomics,rs9263726,HLA-B*58:01 proxy (PSORS1C1),PSORS1C1,,,,Allopurinol HLA-B*58:01 literature,"Proxy tag for HLA-B*58:01; ancestry-dependent; confirm with clinical HLA typing."
+CYP2D6 Risk Factors,rs16947,CYP2D6*2 tag,CYP2D6,,,,,Star-allele support only; CNV not assessed.
+CYP2D6 Risk Factors,rs1135840,CYP2D6*2 tag,CYP2D6,,,,,Star-allele support only; CNV not assessed.
+CYP2D6 Risk Factors,rs28371725,CYP2D6*41 tag,CYP2D6,,,,,Reduced function tag; haplotype context required.
+CYP2D6 Risk Factors,rs35742686,CYP2D6*3 (frameshift),CYP2D6,,,,,Frameshift indel; not reliably called on arrays.
+CYP2D6 Risk Factors,rs5030655,CYP2D6*6 (indel),CYP2D6,,,,,Indel; not reliably called on arrays.
+Healthy Aging,rs10490924,ARMS2 A69S (AMD),ARMS2,T,AMD risk allele (ARMS2 A69S),No risk allele detected,AMD association literature,Association only.

@@ -6,7 +6,6 @@ cd /d "%~dp0"
 
 codex --yolo -m gpt-5.2-codex ^
   -c model_reasoning_effort="high" ^
-  -c model_reasoning_summary_format=experimental ^
-  --enable web_search_request %*
+  -c model_reasoning_summary_format=experimental %*
 
 pause

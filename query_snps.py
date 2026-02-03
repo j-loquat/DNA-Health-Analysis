@@ -12,7 +12,14 @@ from typing import Final
 
 import polars as pl
 
-from run_utils import resolve_base_name, resolve_parquet_path, run_root, update_summary, write_json
+from run_utils import (
+    normalize_genotype,
+    resolve_base_name,
+    resolve_parquet_path,
+    run_root,
+    update_summary,
+    write_json,
+)
 from snp_reference import load_reference, panels_to_records
 
 CLINICAL_PATH = Path(__file__).resolve().parent / "data" / "clinical_interpretations.json"
@@ -47,10 +54,9 @@ def query_core_traits(parquet_path: str, base_name: str) -> None:
     found_snps: dict[str, str] = {}
     for row in results.iter_rows(named=True):
         rsid = row["rsid"]
-        a1 = row["allele1"]
-        a2 = row["allele2"]
-        genotype = "".join(sorted([a1, a2]))
-        found_snps[rsid] = genotype
+        genotype = normalize_genotype(row["allele1"], row["allele2"])
+        if genotype:
+            found_snps[rsid] = genotype
 
     print("\n--- CORE WELLNESS AND LIFESTYLE REPORT ---")
     # Note: Genotypes are sorted alphabetical (e.g., AG, not GA)
