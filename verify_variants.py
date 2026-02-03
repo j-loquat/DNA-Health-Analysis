@@ -110,6 +110,30 @@ def _allele_set_from_string(allele_string: str | None) -> set[str]:
     return {part for part in parts if part in {"A", "C", "G", "T"}}
 
 
+def _normalize_variant_token(token: str) -> str:
+    cleaned = token.strip().upper()
+    if cleaned in {"", "0", "--"}:
+        return ""
+    if cleaned in {"-", "DEL", "D"}:
+        return "DEL"
+    if cleaned in {"INS", "I"}:
+        return "INS"
+    return cleaned
+
+
+def _tokenize_variant_string(allele_string: str | None) -> set[str]:
+    if not allele_string:
+        return set()
+    cleaned = allele_string.strip().upper().replace("|", "/")
+    if "/" not in cleaned:
+        if all(base in {"A", "C", "G", "T"} for base in cleaned) and len(cleaned) <= 2:
+            return {base for base in cleaned}
+        token = _normalize_variant_token(cleaned)
+        return {token} if token else set()
+    parts = [_normalize_variant_token(part) for part in cleaned.split("/")]
+    return {part for part in parts if part}
+
+
 def _complement(alleles: Iterable[str]) -> set[str]:
     mapping = {"A": "T", "T": "A", "C": "G", "G": "C"}
     return {mapping[a] for a in alleles if a in mapping}
@@ -227,15 +251,26 @@ def verify_variants(
         proxy_note = _proxy_note(rsid)
         if rsid in non_snp_map:
             allele_string, strand = fetch_ensembl_alleles(session, cache, rsid)
-            note = "Non-SNP allele call (indel/repeat); not validated by allele orientation."
+            observed_raw = non_snp_map.get(rsid)
+            observed_tokens = _tokenize_variant_string(observed_raw)
+            reference_tokens = _tokenize_variant_string(allele_string)
+            if not reference_tokens:
+                match_status = "non_snp_unknown"
+                note = "Non-SNP allele call (indel/repeat); reference alleles unavailable for validation."
+            elif observed_tokens and observed_tokens.issubset(reference_tokens):
+                match_status = "non_snp_match"
+                note = "Non-SNP allele call matches reference allele set; confirm clinically."
+            else:
+                match_status = "non_snp_mismatch"
+                note = "Non-SNP allele call does not match reference allele set; verify manually."
             verifications.append(
                 VariantVerification(
                     rsid=rsid,
-                    observed_genotype=non_snp_map.get(rsid),
-                    observed_alleles=non_snp_map.get(rsid),
+                    observed_genotype=observed_raw,
+                    observed_alleles=observed_raw,
                     ensembl_alleles=allele_string,
                     ensembl_strand=strand,
-                    match_status="non_snp",
+                    match_status=match_status,
                     gwas_risk_allele=None,
                     note=note,
                     proxy_note=proxy_note,

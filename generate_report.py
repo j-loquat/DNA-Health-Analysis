@@ -58,6 +58,128 @@ def _merge_non_snp_genotypes(*payloads: dict[str, Any]) -> dict[str, str]:
     return merged
 
 
+_PROXY_LABELS: dict[str, str] = {
+    "rs2395029": "HLA-B*57:01 proxy",
+    "rs2844682": "HLA-B*15:02 proxy",
+    "rs3909184": "HLA-B*15:02 proxy",
+    "rs1061235": "HLA-A*31:01 proxy",
+    "rs9263726": "HLA-B*58:01 proxy",
+    "rs4349859": "HLA-B27 proxy",
+    "rs887829": "UGT1A1*28 proxy",
+}
+
+_HLA_PROXY_RSIDS = {"rs2395029", "rs2844682", "rs3909184", "rs1061235", "rs9263726"}
+_CARRIER_MARKERS: dict[str, dict[str, str | None]] = {
+    "rs334": {"label": "Sickle cell (HbS)", "effect_allele": "T"},
+    "rs113993960": {"label": "CFTR F508del", "effect_allele": None},
+    "rs28929474": {"label": "SERPINA1 Pi*Z", "effect_allele": "A"},
+    "rs17580": {"label": "SERPINA1 Pi*S", "effect_allele": "T"},
+    "rs1050828": {"label": "G6PD c.202G>A", "effect_allele": "A"},
+    "rs1050829": {"label": "G6PD c.376A>G", "effect_allele": "G"},
+}
+_HEREDITARY_FOUNDER_MARKERS: dict[str, dict[str, str | None]] = {
+    "rs80357906": {"label": "BRCA1 5382insC", "effect_allele": None},
+    "rs80359550": {"label": "BRCA2 6174delT", "effect_allele": None},
+}
+
+
+def _proxy_markers_present(
+    genotypes: dict[str, str],
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> list[dict[str, str]]:
+    markers: list[dict[str, str]] = []
+    if not variant_lookup:
+        return markers
+    for rsid, label in _PROXY_LABELS.items():
+        genotype = genotypes.get(rsid)
+        if not genotype:
+            continue
+        note = variant_lookup.get(rsid, {}).get("proxy_note") or "Proxy marker; confirm clinically."
+        markers.append(
+            {
+                "label": label,
+                "rsid": rsid,
+                "genotype": genotype,
+                "note": note,
+            }
+        )
+    return markers
+
+
+def _high_priority_findings(
+    genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str],
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+
+    for rsid in sorted(_HLA_PROXY_RSIDS):
+        genotype = genotypes.get(rsid)
+        if not genotype:
+            continue
+        label = _PROXY_LABELS.get(rsid, f"HLA proxy {rsid}")
+        note = variant_lookup.get(rsid, {}).get("proxy_note") if variant_lookup else None
+        if not note:
+            note = "Proxy marker; ancestry-dependent. Confirm with clinical HLA typing."
+        findings.append(
+            {
+                "category": "HLA proxy safety alerts",
+                "label": label,
+                "sub": f"{rsid} {genotype}",
+                "note": note,
+            }
+        )
+
+    for rsid, entry in _CARRIER_MARKERS.items():
+        label = entry["label"] or "Carrier marker"
+        effect_allele = entry.get("effect_allele")
+        genotype = genotypes.get(rsid)
+        non_snp_call = non_snp_genotypes.get(rsid)
+        if genotype and effect_allele and _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
+            findings.append(
+                {
+                    "category": "Carrier screening hits",
+                    "label": label,
+                    "sub": f"{rsid} {genotype}",
+                    "note": "Screening-level signal; confirm with clinical testing.",
+                }
+            )
+        elif non_snp_call and not effect_allele:
+            findings.append(
+                {
+                    "category": "Carrier screening hits",
+                    "label": label,
+                    "sub": f"{rsid} {non_snp_call}",
+                    "note": "Indel call observed; not interpreted. Confirm with clinical testing.",
+                }
+            )
+
+    for rsid, entry in _HEREDITARY_FOUNDER_MARKERS.items():
+        label = entry["label"] or "Hereditary cancer marker"
+        genotype = genotypes.get(rsid)
+        non_snp_call = non_snp_genotypes.get(rsid)
+        if genotype:
+            findings.append(
+                {
+                    "category": "Hereditary cancer founder variants",
+                    "label": label,
+                    "sub": f"{rsid} {genotype}",
+                    "note": "Founder variant signal; confirm with clinical testing.",
+                }
+            )
+        elif non_snp_call:
+            findings.append(
+                {
+                    "category": "Hereditary cancer founder variants",
+                    "label": label,
+                    "sub": f"{rsid} {non_snp_call}",
+                    "note": "Indel call observed; not interpreted. Confirm with clinical testing.",
+                }
+            )
+
+    return findings
+
+
 def _has_allele(genotype: str | None, allele: str) -> bool:
     return bool(genotype and allele in genotype)
 
@@ -471,15 +593,17 @@ def _build_risk_cards(
         if hbb == "TT":
             description = "HbS/HbS genotype detected; high risk for sickle cell disease."
             level = "high"
+            action = "Confirm with clinical hemoglobin testing; disease-level genotype requires clinical care."
         else:
             description = "HbS variant detected; likely sickle cell trait (carrier)."
             level = "med"
+            action = "Confirm with clinical hemoglobin testing; carrier screening context."
         cards.append(
             _risk_card(
                 "Sickle Cell (HbS)",
                 level,
                 description,
-                "Confirm with clinical hemoglobin testing; carrier screening only.",
+                action,
                 evidence="ClinVar",
                 category="clinical",
             )
@@ -964,14 +1088,18 @@ def _panel_rows(
                 status = "proxy"
                 indicator = "Proxy marker"
 
+        proxy_note = None
         if variant_lookup and rsid in variant_lookup:
             match_status = variant_lookup[rsid].get("match_status")
+            proxy_note = variant_lookup[rsid].get("proxy_note")
             if match_status in {"reverse_complement", "mismatch"}:
                 caution_note = "Strand caution: reference orientation differs."
                 detail = f"{caution_note} {detail}".strip() if detail else caution_note
                 if include_indicators:
                     status = "caution"
                     indicator = "Strand caution"
+        if proxy_note and (genotype or non_snp_call):
+            detail = f"{detail} {proxy_note}".strip() if detail else proxy_note
 
         rows.append({
             "label": label,
@@ -1024,7 +1152,7 @@ def _hidden_screening_rows(
             value = "Not assessed (non-SNP call)"
             status = "missing"
             sub_value = non_snp_call or "Not Found"
-            note = "Indel/repeat call observed; not interpreted."
+            note = "Indel call observed; not interpreted. Confirm with clinical testing."
 
         if rsid in {"rs1050828", "rs1050829"}:
             if sex == "male":
@@ -1193,6 +1321,30 @@ def _coverage_notes(
             if entry["proxy"]:
                 note = f"{note} {entry['proxy']}"
             notes.append(note)
+    return notes
+
+
+def _non_snp_verification_notes(
+    variant_verification: list[dict[str, Any]],
+) -> list[str]:
+    notes: list[str] = []
+    for entry in variant_verification:
+        match_status = entry.get("match_status")
+        if match_status not in {"non_snp_match", "non_snp_mismatch", "non_snp_unknown"}:
+            continue
+        rsid = entry.get("rsid", "unknown")
+        observed = entry.get("observed_genotype") or entry.get("observed_alleles") or "NA"
+        if match_status == "non_snp_match":
+            status_text = "matches reference allele set"
+        elif match_status == "non_snp_mismatch":
+            status_text = "does not match reference allele set"
+        else:
+            status_text = "reference alleles unavailable"
+        note = entry.get("note")
+        line = f"Non-SNP verification: {rsid} ({observed}) - {status_text}."
+        if note:
+            line = f"{line} {note}"
+        notes.append(line)
     return notes
 
 
@@ -1510,12 +1662,16 @@ def _expanded_panels(
                 genotype_display = f"{non_snp_call} (non-SNP call)"
             else:
                 genotype_display = "Not Found"
+            proxy_note = None
             if genotype and variant_lookup and rsid in variant_lookup:
                 match_status = variant_lookup[rsid].get("match_status")
+                proxy_note = variant_lookup[rsid].get("proxy_note")
                 if match_status in {"reverse_complement", "mismatch"}:
                     genotype_display = "Not interpreted (strand caution)"
             if rsid in partial_rsids:
                 genotype_display = f"{genotype_display} (partial coverage)"
+            if proxy_note:
+                genotype_display = f"{genotype_display} (proxy marker)"
             items.append(f"{label} ({rsid}): {genotype_display}")
         panels_out.append({"name": panel_name, "items": items})
     return panels_out
@@ -1676,6 +1832,8 @@ def _render_html(
     demographics_note: str | None,
     coverage_notes: list[str],
     hidden_screening: list[dict[str, str]],
+    proxy_markers: list[dict[str, str]],
+    high_priority: list[dict[str, str]],
     *,
     include_trials: bool,
     research_findings: list[dict[str, str]],
@@ -1782,6 +1940,44 @@ def _render_html(
     else:
         hidden_block = ""
 
+    proxy_block = ""
+    if proxy_markers:
+        proxy_rows = []
+        for marker in proxy_markers:
+            label = marker["label"]
+            rsid = marker["rsid"]
+            genotype = marker["genotype"]
+            note = marker.get("note")
+            proxy_rows.append(
+                "<div class=\"data-row\">"
+                f"<div class=\"data-label\">{label}</div>"
+                f"<div class=\"data-val\">{rsid} {genotype}</div>"
+                "</div>"
+            )
+            if note:
+                proxy_rows.append(
+                    "<div class=\"data-row sub-row\">"
+                    f"<div class=\"data-label\">{note}</div>"
+                    "<div class=\"data-val\"></div>"
+                    "</div>"
+                )
+        proxy_block = (
+            "<div class=\"section-head\">"
+            "<h2>Proxy Marker Limitations</h2>"
+            "<div class=\"section-line\"></div>"
+            "</div>"
+            "<div class=\"dashboard-grid\">"
+            "<div class=\"col-full card\">"
+            "<div class=\"data-row sub-row\">"
+            "<div class=\"data-label\">Proxy markers are population-dependent tags and are not diagnostic. "
+            "Confirm with clinical testing.</div>"
+            "<div class=\"data-val\"></div>"
+            "</div>"
+            + "".join(proxy_rows) +
+            "</div>"
+            "</div>"
+        )
+
     if coverage_notes:
         notes = "".join(
             "<div class=\"data-row\">"
@@ -1803,7 +1999,10 @@ def _render_html(
     else:
         coverage_block = ""
 
-    html = html.replace("<!-- Coverage notes inserted here -->", hidden_block + coverage_block)
+    html = html.replace(
+        "<!-- Coverage notes inserted here -->",
+        hidden_block + coverage_block + proxy_block,
+    )
 
     if research_findings:
         research_cards = []
@@ -1858,6 +2057,57 @@ def _render_html(
         clinical_block = "\n".join(card_html(card) for card in clinical_cards)
     else:
         clinical_block = "<div class=\"col-full card\">No actionable clinical findings detected.</div>"
+
+    high_priority_block = ""
+    if high_priority:
+        grouped: dict[str, list[dict[str, str]]] = {}
+        for item in high_priority:
+            grouped.setdefault(item["category"], []).append(item)
+        blocks = []
+        for category, items in grouped.items():
+            rows = [
+                "<div class=\"data-row sub-row\">"
+                f"<div class=\"data-label\">{category}</div>"
+                "<div class=\"data-val\"></div>"
+                "</div>"
+            ]
+            for item in items:
+                rows.append(
+                    "<div class=\"data-row\">"
+                    f"<div class=\"data-label\">{item['label']}</div>"
+                    f"<div class=\"data-val\">{item['sub']}</div>"
+                    "</div>"
+                )
+                note = item.get("note")
+                if note:
+                    rows.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">{note}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+            blocks.append("".join(rows))
+        high_priority_block = (
+            "<div class=\"section-head\">"
+            "<h2>High Priority Findings</h2>"
+            "<div class=\"section-line\"></div>"
+            "</div>"
+            "<div class=\"dashboard-grid\">"
+            "<div class=\"col-full card\">"
+            + "".join(blocks) +
+            "</div>"
+            "</div>"
+        )
+    else:
+        high_priority_block = (
+            "<div class=\"section-head\">"
+            "<h2>High Priority Findings</h2>"
+            "<div class=\"section-line\"></div>"
+            "</div>"
+            "<div class=\"dashboard-grid\">"
+            "<div class=\"col-full card\">No high priority findings detected.</div>"
+            "</div>"
+        )
 
     if association_cards:
         association_block = "\n".join(card_html(card) for card in association_cards)
@@ -2083,6 +2333,7 @@ def _render_html(
         trials_block = ""
 
     html = html.replace("<!-- Actionable risk cards inserted here -->", clinical_block)
+    html = html.replace("<!-- High priority inserted here -->", high_priority_block)
     html = html.replace("<!-- Association risk cards inserted here -->", association_block)
     html = html.replace("<!-- Wellness tables inserted here -->", wellness_block)
     html = html.replace("<!-- Expanded panels inserted here -->", expanded_block)
@@ -2104,6 +2355,8 @@ def _render_markdown(
     variant_verification: list[dict[str, Any]],
     coverage_notes: list[str],
     hidden_screening: list[dict[str, str]],
+    proxy_markers: list[dict[str, str]],
+    high_priority: list[dict[str, str]],
     *,
     include_trials: bool,
     research_findings: list[dict[str, str]],
@@ -2161,6 +2414,23 @@ def _render_markdown(
         lines.append("No actionable clinical findings detected.")
     lines.append("\n---\n")
 
+    lines.append(f"## {section}. High Priority Findings")
+    section += 1
+    if high_priority:
+        grouped: dict[str, list[dict[str, str]]] = {}
+        for item in high_priority:
+            grouped.setdefault(item["category"], []).append(item)
+        for category, items in grouped.items():
+            lines.append(f"**{category}**")
+            for item in items:
+                lines.append(f"* {item['label']}: {item['sub']}")
+                if item.get("note"):
+                    lines.append(f"  - Note: {item['note']}")
+            lines.append("")
+    else:
+        lines.append("No high priority findings detected.")
+    lines.append("\n---\n")
+
     lines.append(f"## {section}. Lifestyle & Genetic Associations")
     section += 1
     if association_cards:
@@ -2192,6 +2462,20 @@ def _render_markdown(
         section += 1
         for note in coverage_notes:
             lines.append(f"* {note}")
+        lines.append("\n---\n")
+
+    if proxy_markers:
+        lines.append(f"## {section}. Proxy Marker Limitations")
+        section += 1
+        lines.append(
+            "_Proxy markers are population-dependent tags and are not diagnostic. "
+            "Confirm with clinical testing._"
+        )
+        for marker in proxy_markers:
+            lines.append(f"* {marker['label']}: {marker['rsid']} {marker['genotype']}")
+            note = marker.get("note")
+            if note:
+                lines.append(f"  - Note: {note}")
         lines.append("\n---\n")
 
     lines.append(f"## {section}. Wellness & Lifestyle (Summary)")
@@ -2374,6 +2658,10 @@ def main() -> int:
     include_trials = _should_include_trials(risk_cards, trials_by_finding)
     # variant_verification loaded above for allele orientation checks
     coverage_notes = _coverage_notes(genotypes, non_snp_genotypes)
+    if isinstance(variant_verification, list):
+        coverage_notes.extend(_non_snp_verification_notes(variant_verification))
+    proxy_markers = _proxy_markers_present(genotypes, variant_lookup)
+    high_priority = _high_priority_findings(genotypes, non_snp_genotypes, variant_lookup)
     demographics_note = _demographics_notice(summary)
 
     template = Path("report_template.html").read_text(encoding="utf-8")
@@ -2390,6 +2678,8 @@ def main() -> int:
         demographics_note,
         coverage_notes,
         hidden_screening,
+        proxy_markers,
+        high_priority,
         include_trials=include_trials,
         research_findings=research_findings if isinstance(research_findings, list) else [],
     )
@@ -2406,6 +2696,8 @@ def main() -> int:
         variant_verification if isinstance(variant_verification, list) else [],
         coverage_notes,
         hidden_screening,
+        proxy_markers,
+        high_priority,
         include_trials=include_trials,
         research_findings=research_findings if isinstance(research_findings, list) else [],
     )
