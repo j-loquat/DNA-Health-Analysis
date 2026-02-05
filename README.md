@@ -18,14 +18,21 @@ git clone https://github.com/j-loquat/DNA-Health-Analysis.git
 cd DNA-Health-Analysis
 ```
 
-### 3. How to Run (AI-Assisted)
+### 3. Add Your DNA File
+Place your raw DNA `.txt` file in the repository root (recommended), for example:
+```text
+DNA-Health-Analysis/your-dna-file.txt
+```
+
+### 4. How to Run (AI-Assisted)
 This project is designed to be driven by an AI coding assistant.
 1.  Open this folder in your preferred AI-enabled environment:
     *   **CLI Tools:** Gemini CLI, Codex CLI, Claude Code.
     *   **IDE Extensions:** VS Code with GitHub Copilot, Cursor, etc.
 2.  Open the file **`USE_THIS_PROMPT.txt`**.
 3.  Copy the entire text from that file.
-4.  Paste it into your AI chat window and run it.
+4.  Update the DNA filename in the prompt (for example, replace `@ancestrydna-test-file.txt` with your file).
+5.  Paste it into your AI chat window and run it.
 
 The AI will handle the execution of the pipeline, which includes verifying file integrity, querying SNPs, analyzing health risks, and generating a final report.
 
@@ -41,7 +48,19 @@ This workflow follows the steps detailed in [`DNA_Analysis_Steps.md`](DNA_Analys
 4.  **Aging & Life:** Analyzes longevity, vitamins, and methylation (MTHFR).
 5.  **Hidden Risks:** Screen for high-stakes risks like Factor V Leiden, Lynch Syndrome, and Pharmacogenomics.
 6.  **Expanded Panels:** Broader look at Cardiometabolic, Neuro, Cancer, and Functional Health traits.
-7.  **Report Generation:** Synthesizes all findings into a comprehensive HTML/Markdown report.
+7.  **Report Generation:** Synthesizes all findings into comprehensive Markdown and HTML reports.
+
+## Output Files
+For each run, outputs are written to:
+```text
+runs/YYYYMMDD/<dna-file-base-name>/
+```
+
+Key report files:
+- `<dna-file-base-name>_Report.md`
+- `<dna-file-base-name>_Report.html`
+
+The Markdown report is especially useful for follow-up analysis: you can upload it to AI tools (for example ChatGPT or Gemini) and ask targeted questions about specific findings, limitations, and next steps.
 
 ## Disclaimer
 **This is not medical advice.** This tool is for educational and research purposes only. Always consult a healthcare professional for medical diagnosis and decision-making.

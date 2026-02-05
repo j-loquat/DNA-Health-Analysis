@@ -67,8 +67,9 @@ _PROXY_LABELS: dict[str, str] = {
     "rs4349859": "HLA-B27 proxy",
     "rs887829": "UGT1A1*28 proxy",
 }
+_NAT2_ORDER = ("rs1801280", "rs1799930", "rs1799931")
+_NAT2_RSIDS = set(_NAT2_ORDER)
 
-_HLA_PROXY_RSIDS = {"rs2395029", "rs2844682", "rs3909184", "rs1061235", "rs9263726"}
 _CARRIER_MARKERS: dict[str, dict[str, str | None]] = {
     "rs334": {"label": "Sickle cell (HbS)", "effect_allele": "T"},
     "rs113993960": {"label": "CFTR F508del", "effect_allele": None},
@@ -81,6 +82,101 @@ _HEREDITARY_FOUNDER_MARKERS: dict[str, dict[str, str | None]] = {
     "rs80357906": {"label": "BRCA1 5382insC", "effect_allele": None},
     "rs80359550": {"label": "BRCA2 6174delT", "effect_allele": None},
 }
+_STRAND_CAUTION_MATCH_STATUSES = {"reverse_complement", "mismatch"}
+_HIGH_EVIDENCE_PGX_ESCALATION: list[dict[str, Any]] = [
+    {
+        "label": "Fluoropyrimidine Toxicity",
+        "level": "high",
+        "description_prefix": "DPYD variant(s) detected: ",
+        "description_suffix": ".",
+        "action": "Confirm with clinical-grade DPYD testing before 5-FU/capecitabine; dosing changes may be needed.",
+        "evidence": "CPIC",
+        "markers": [
+            {"rsid": "rs3918290", "risk_allele": "A", "display": "rs3918290 (*2A)"},
+            {"rsid": "rs67376798", "risk_allele": "T", "display": "rs67376798 (c.2846A>T)"},
+            {"rsid": "rs55886062", "risk_allele": "G", "display": "rs55886062 (c.1679T>G)"},
+            {"rsid": "rs56038477", "risk_allele": "A", "display": "rs56038477 (HapB3 tag)"},
+            {"rsid": "rs75017182", "risk_allele": "G", "display": "rs75017182 (HapB3)"},
+        ],
+    },
+    {
+        "label": "Statin Myopathy Risk",
+        "level": "med",
+        "description_prefix": "SLCO1B1 risk marker(s) detected: ",
+        "description_suffix": ".",
+        "action": "If prescribed simvastatin, consider lower dose or alternative statin per CPIC guidance.",
+        "evidence": "CPIC",
+        "markers": [
+            {"rsid": "rs4149056", "risk_allele": "C", "display": "SLCO1B1 rs4149056"},
+        ],
+    },
+    {
+        "label": "Tacrolimus Metabolism",
+        "level": "med",
+        "description_prefix": "CYP3A5 marker(s) detected: ",
+        "description_suffix": ".",
+        "action": "Tacrolimus dosing should follow CPIC CYP3A5 guidance.",
+        "evidence": "CPIC",
+        "markers": [
+            {"rsid": "rs776746", "risk_allele": "A", "display": "CYP3A5 rs776746"},
+        ],
+    },
+    {
+        "label": "Atazanavir Hyperbilirubinemia",
+        "level": "med",
+        "description_prefix": "UGT1A1 reduced-function marker(s) detected: ",
+        "description_suffix": ".",
+        "action": "Atazanavir use should follow CPIC UGT1A1 guidance.",
+        "evidence": "CPIC",
+        "markers": [
+            {"rsid": "rs4148323", "risk_allele": "A", "display": "UGT1A1*6 (rs4148323)"},
+            {"rsid": "rs887829", "risk_allele": "T", "display": "UGT1A1*28 proxy (rs887829)"},
+        ],
+    },
+]
+
+
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    noun = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {noun}"
+
+
+def _display_chromosome_label(chromosome: Any) -> str:
+    text = str(chromosome or "NA").strip().upper()
+    if text == "23":
+        return "X"
+    if text == "24":
+        return "Y"
+    if text == "25":
+        return "MT"
+    if text in {"X", "Y", "MT"}:
+        return text
+    if text.isdigit() and 1 <= int(text) <= 22:
+        return text
+    return f"Other/Contigs ({text})"
+
+
+def _variant_flags(
+    rsid: str,
+    genotype: str | None,
+    non_snp_call: str | None,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+    *,
+    is_partial_panel: bool = False,
+) -> dict[str, Any]:
+    entry = variant_lookup.get(rsid) if variant_lookup else None
+    match_status = str(entry.get("match_status", "")) if entry else ""
+    proxy_note_raw = entry.get("proxy_note") if entry else None
+    proxy_note = proxy_note_raw.strip() if isinstance(proxy_note_raw, str) else ""
+    has_call = bool(genotype or non_snp_call)
+    return {
+        "is_missing": not has_call,
+        "is_non_snp_placeholder": bool(non_snp_call),
+        "is_strand_caution": bool(genotype and match_status in _STRAND_CAUTION_MATCH_STATUSES),
+        "is_proxy": bool(proxy_note and has_call),
+        "is_partial_panel": is_partial_panel,
+        "proxy_note": proxy_note,
+    }
 
 
 def _proxy_markers_present(
@@ -110,55 +206,42 @@ def _high_priority_findings(
     genotypes: dict[str, str],
     non_snp_genotypes: dict[str, str],
     variant_lookup: dict[str, dict[str, Any]] | None,
+    risk_cards: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
-
-    for rsid in sorted(_HLA_PROXY_RSIDS):
-        genotype = genotypes.get(rsid)
-        if not genotype:
-            continue
-        label = _PROXY_LABELS.get(rsid, f"HLA proxy {rsid}")
-        note = variant_lookup.get(rsid, {}).get("proxy_note") if variant_lookup else None
-        if not note:
-            note = "Proxy marker; ancestry-dependent. Confirm with clinical HLA typing."
-        findings.append(
-            {
-                "category": "HLA proxy safety alerts",
-                "label": label,
-                "sub": f"{rsid} {genotype}",
-                "note": note,
-            }
-        )
 
     for rsid, entry in _CARRIER_MARKERS.items():
         label = entry["label"] or "Carrier marker"
         effect_allele = entry.get("effect_allele")
         genotype = genotypes.get(rsid)
-        non_snp_call = non_snp_genotypes.get(rsid)
         if genotype and effect_allele and _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
+            display_label = label
+            note = "Screening-level signal; confirm with clinical testing."
+            if rsid == "rs334":
+                display_label = "Hemoglobin variant (HbS)"
+                if genotype == "TT":
+                    note = "Suggests disease-level HbSS pattern from screening data; confirm clinically."
+                else:
+                    note = "Likely carrier-level HbS signal from screening data; confirm clinically."
+            elif rsid == "rs17580":
+                note = (
+                    "Pi*S allele present; possible mild AAT reduction. Interpret with Pi*Z status, "
+                    "serum AAT level, and clinical context."
+                )
             findings.append(
                 {
-                    "category": "Carrier screening hits",
-                    "label": label,
+                    "category": "High-impact findings (screening-level)",
+                    "label": display_label,
                     "sub": f"{rsid} {genotype}",
-                    "note": "Screening-level signal; confirm with clinical testing.",
-                }
-            )
-        elif non_snp_call and not effect_allele:
-            findings.append(
-                {
-                    "category": "Carrier screening hits",
-                    "label": label,
-                    "sub": f"{rsid} {non_snp_call}",
-                    "note": "Indel call observed; not interpreted. Confirm with clinical testing.",
+                    "note": note,
                 }
             )
 
     for rsid, entry in _HEREDITARY_FOUNDER_MARKERS.items():
         label = entry["label"] or "Hereditary cancer marker"
+        effect_allele = entry.get("effect_allele")
         genotype = genotypes.get(rsid)
-        non_snp_call = non_snp_genotypes.get(rsid)
-        if genotype:
+        if genotype and effect_allele and _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
             findings.append(
                 {
                     "category": "Hereditary cancer founder variants",
@@ -167,17 +250,55 @@ def _high_priority_findings(
                     "note": "Founder variant signal; confirm with clinical testing.",
                 }
             )
-        elif non_snp_call:
-            findings.append(
-                {
-                    "category": "Hereditary cancer founder variants",
-                    "label": label,
-                    "sub": f"{rsid} {non_snp_call}",
-                    "note": "Indel call observed; not interpreted. Confirm with clinical testing.",
-                }
-            )
+
+    medication_labels: set[str] = set()
+    for card in risk_cards or []:
+        if card.get("category") != "clinical":
+            continue
+        if card.get("evidence") not in {"CPIC", "DPWG"}:
+            continue
+        label = card.get("label") or "Medication-related finding"
+        if label in medication_labels:
+            continue
+        medication_labels.add(label)
+        findings.append(
+            {
+                "category": "Medication alerts (screening-level)",
+                "label": label,
+                "sub": str(card.get("description", "")).strip() or "See actionable PGx section.",
+                "note": "Mirrors the actionable PGx section; confirm clinically before medication changes.",
+            }
+        )
 
     return findings
+
+
+def _validate_hbs_interpretation_guardrail(
+    genotypes: dict[str, str],
+    risk_cards: list[dict[str, str]],
+    high_priority: list[dict[str, str]],
+) -> None:
+    if genotypes.get("rs334"):
+        return
+    offenders: list[str] = []
+    for card in risk_cards:
+        label = str(card.get("label", ""))
+        description = str(card.get("description", ""))
+        combined = f"{label} {description}".lower()
+        if "hbc" in combined or label == "Sickle Cell (HbS)":
+            offenders.append(f"risk_card:{label or description}")
+    for item in high_priority:
+        label = str(item.get("label", ""))
+        sub = str(item.get("sub", ""))
+        combined = f"{label} {sub}".lower()
+        if "hbc" in combined or label in {"Hemoglobin variant (HbS)", "Sickle Cell (HbS)", "Sickle cell (HbS)"}:
+            offenders.append(f"high_priority:{label or sub}")
+    if offenders:
+        details = ", ".join(offenders)
+        raise ValueError(
+            "Validation failed: rs334 is missing, but HbS/HbC interpretations were generated "
+            f"({details})."
+        )
 
 
 def _has_allele(genotype: str | None, allele: str) -> bool:
@@ -199,6 +320,63 @@ def _apoe_haplotype(genotypes: dict[str, str], clinical: dict[str, Any]) -> str:
     return clinical.get("apoe_haplotype_map", {}).get(key, "Unknown")
 
 
+def _apoe_assessment(
+    genotypes: dict[str, str],
+    clinical: dict[str, Any],
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> dict[str, Any]:
+    required_rsids = ("rs429358", "rs7412")
+    observed = {rsid: genotypes.get(rsid) for rsid in required_rsids}
+    missing = [rsid for rsid, genotype in observed.items() if not genotype]
+    if missing:
+        return {
+            "assessed": False,
+            "reason": f"APOE not assessed (partial/missing SNPs): missing {', '.join(missing)}.",
+            "missing_rsids": missing,
+            "unverified_rsids": [],
+            "haplotype": None,
+            "genotypes": observed,
+        }
+
+    unverified: list[str] = []
+    for rsid in required_rsids:
+        if not variant_lookup:
+            unverified.append(rsid)
+            continue
+        match_status = str((variant_lookup.get(rsid) or {}).get("match_status") or "")
+        if match_status not in {"match", "reverse_complement"}:
+            unverified.append(rsid)
+    if unverified:
+        return {
+            "assessed": False,
+            "reason": f"APOE not assessed (verification incomplete): {', '.join(unverified)}.",
+            "missing_rsids": [],
+            "unverified_rsids": unverified,
+            "haplotype": None,
+            "genotypes": observed,
+        }
+
+    key = f"{observed['rs429358']}|{observed['rs7412']}"
+    haplotype = clinical.get("apoe_haplotype_map", {}).get(key)
+    if not haplotype:
+        return {
+            "assessed": False,
+            "reason": f"APOE not assessed (unmapped genotype combination): {key}.",
+            "missing_rsids": [],
+            "unverified_rsids": [],
+            "haplotype": None,
+            "genotypes": observed,
+        }
+    return {
+        "assessed": True,
+        "reason": "",
+        "missing_rsids": [],
+        "unverified_rsids": [],
+        "haplotype": haplotype,
+        "genotypes": observed,
+    }
+
+
 def _risk_card(
     label: str,
     level: str,
@@ -216,6 +394,48 @@ def _risk_card(
         "evidence": evidence,
         "category": category,
     }
+
+
+def _warfarin_panel_status(genotypes: dict[str, str]) -> str:
+    has_vkorc1 = bool(genotypes.get("rs9923231"))
+    has_rs12777823 = bool(genotypes.get("rs12777823"))
+    if has_vkorc1 and has_rs12777823:
+        return "Warfarin panel status: VKORC1 present; rs12777823 present."
+    if has_vkorc1 and not has_rs12777823:
+        return (
+            "Warfarin panel status: VKORC1 present; rs12777823 missing in this file build "
+            "(ancestry modifier). Panel partial."
+        )
+    if not has_vkorc1 and has_rs12777823:
+        return (
+            "Warfarin panel status: VKORC1 missing in this file build; rs12777823 present. "
+            "Dosing algorithm incomplete."
+        )
+    return (
+        "Warfarin panel status: VKORC1 and rs12777823 missing in this file build. "
+        "Dosing algorithm incomplete."
+    )
+
+
+def _warfarin_action_guidance(genotypes: dict[str, str]) -> str:
+    has_vkorc1 = bool(genotypes.get("rs9923231"))
+    has_rs12777823 = bool(genotypes.get("rs12777823"))
+    missing: list[str] = []
+    if not has_vkorc1:
+        missing.append("VKORC1")
+    if not has_rs12777823:
+        missing.append("rs12777823")
+    if missing:
+        return (
+            "Partial warfarin genetics available ("
+            + " / ".join(missing)
+            + " missing in this file build); do not use a full CPIC dosing calculator from this file alone. "
+            "Use clinical dosing with INR monitoring, and consider clinical-grade PGx if warfarin is planned."
+        )
+    return (
+        "Warfarin genetics panel appears complete in this file; combine CPIC-guided dosing with "
+        "clinical judgment and INR monitoring."
+    )
 
 
 def _nat2_profile(genotypes: dict[str, str]) -> dict[str, Any]:
@@ -249,30 +469,112 @@ def _variant_lookup(variant_verification: list[dict[str, Any]]) -> dict[str, dic
     return lookup
 
 
+def _variant_match_ok(
+    rsid: str,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> bool:
+    if not variant_lookup:
+        return True
+    entry = variant_lookup.get(rsid)
+    if not entry:
+        return True
+    return entry.get("match_status") not in {"mismatch", "non_snp_mismatch"}
+
+
+def _risk_allele_count(
+    rsid: str,
+    genotype: str | None,
+    risk_allele: str,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> int:
+    if not genotype:
+        return 0
+    if not _variant_match_ok(rsid, variant_lookup):
+        return 0
+    if _has_allele(genotype, risk_allele):
+        return _allele_count(genotype, risk_allele)
+    if not variant_lookup:
+        return 0
+    entry = variant_lookup.get(rsid)
+    if not entry:
+        return 0
+    complement = {"A": "T", "T": "A", "C": "G", "G": "C"}.get(risk_allele)
+    if not complement:
+        return 0
+    ensembl_alleles = entry.get("ensembl_alleles") or ""
+    if entry.get("match_status") == "reverse_complement":
+        return _allele_count(genotype, complement)
+    if ensembl_alleles and (risk_allele not in ensembl_alleles) and (complement in ensembl_alleles):
+        return _allele_count(genotype, complement)
+    return 0
+
+
 def _risk_allele_present(
     rsid: str,
     genotype: str | None,
     risk_allele: str,
     variant_lookup: dict[str, dict[str, Any]] | None,
 ) -> bool:
-    if not genotype:
-        return False
-    if _has_allele(genotype, risk_allele):
-        return True
-    if not variant_lookup:
-        return False
-    entry = variant_lookup.get(rsid)
-    if not entry:
-        return False
-    complement = {"A": "T", "T": "A", "C": "G", "G": "C"}.get(risk_allele)
-    if not complement:
-        return False
-    ensembl_alleles = entry.get("ensembl_alleles") or ""
-    if entry.get("match_status") == "reverse_complement":
-        return _has_allele(genotype, complement)
-    if ensembl_alleles and (risk_allele not in ensembl_alleles) and (complement in ensembl_alleles):
-        return _has_allele(genotype, complement)
-    return False
+    return _risk_allele_count(rsid, genotype, risk_allele, variant_lookup) > 0
+
+
+def _risk_zygosity_label(
+    rsid: str,
+    genotype: str | None,
+    risk_allele: str,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> str:
+    count = _risk_allele_count(rsid, genotype, risk_allele, variant_lookup)
+    if count >= 2:
+        return "homozygous risk allele"
+    if count == 1:
+        return "heterozygous risk allele"
+    return "risk-allele status uncertain"
+
+
+def _format_pgx_hit(
+    label: str,
+    rsid: str,
+    genotype: str | None,
+    risk_allele: str,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> str:
+    genotype_text = genotype or "NA"
+    zygosity = _risk_zygosity_label(rsid, genotype, risk_allele, variant_lookup)
+    return f"{label} ({rsid} {genotype_text}; {zygosity})"
+
+
+def _escalate_high_evidence_pgx(
+    cards: list[dict[str, str]],
+    genotypes: dict[str, str],
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> list[dict[str, str]]:
+    existing_labels = {card.get("label") for card in cards}
+    escalated = list(cards)
+    for rule in _HIGH_EVIDENCE_PGX_ESCALATION:
+        label = str(rule["label"])
+        if label in existing_labels:
+            continue
+        hits: list[str] = []
+        for marker in rule.get("markers", []):
+            rsid = str(marker["rsid"])
+            risk_allele = str(marker["risk_allele"])
+            genotype = genotypes.get(rsid)
+            if _risk_allele_present(rsid, genotype, risk_allele, variant_lookup):
+                hits.append(str(marker["display"]))
+        if not hits:
+            continue
+        escalated.append(
+            _risk_card(
+                label,
+                str(rule["level"]),
+                str(rule["description_prefix"]) + ", ".join(hits) + str(rule["description_suffix"]),
+                str(rule["action"]),
+                evidence=str(rule["evidence"]),
+                category="clinical",
+            )
+        )
+    return escalated
 
 
 def _build_risk_cards(
@@ -282,32 +584,39 @@ def _build_risk_cards(
     sex: str | None = None,
 ) -> list[dict[str, str]]:
     cards: list[dict[str, str]] = []
+    warfarin_panel_status = _warfarin_panel_status(genotypes)
+    warfarin_action_guidance = _warfarin_action_guidance(genotypes)
 
     cyp2c9_2 = genotypes.get("rs1799853")
     cyp2c9_3 = genotypes.get("rs1057910")
     cyp2c9_5 = genotypes.get("rs28371686")
     cyp2c9_8 = genotypes.get("rs7900194")
     cyp2c9_11 = genotypes.get("rs28371685")
+    cyp2c9_2_count = _risk_allele_count("rs1799853", cyp2c9_2, "T", variant_lookup)
+    cyp2c9_3_count = _risk_allele_count("rs1057910", cyp2c9_3, "C", variant_lookup)
+    cyp2c9_5_count = _risk_allele_count("rs28371686", cyp2c9_5, "G", variant_lookup)
+    cyp2c9_8_count = _risk_allele_count("rs7900194", cyp2c9_8, "A", variant_lookup)
+    cyp2c9_11_count = _risk_allele_count("rs28371685", cyp2c9_11, "T", variant_lookup)
     cyp2c9_variant_count = (
-        _allele_count(cyp2c9_2, "T")
-        + _allele_count(cyp2c9_3, "C")
-        + _allele_count(cyp2c9_5, "G")
-        + _allele_count(cyp2c9_8, "A")
-        + _allele_count(cyp2c9_11, "T")
+        cyp2c9_2_count
+        + cyp2c9_3_count
+        + cyp2c9_5_count
+        + cyp2c9_8_count
+        + cyp2c9_11_count
     )
     if cyp2c9_variant_count:
         level = "med" if cyp2c9_variant_count == 1 else "high"
         detected = []
-        if _has_allele(cyp2c9_2, "T"):
-            detected.append("CYP2C9*2")
-        if _has_allele(cyp2c9_3, "C"):
-            detected.append("CYP2C9*3")
-        if _has_allele(cyp2c9_5, "G"):
-            detected.append("CYP2C9*5")
-        if _has_allele(cyp2c9_8, "A"):
-            detected.append("CYP2C9*8")
-        if _has_allele(cyp2c9_11, "T"):
-            detected.append("CYP2C9*11")
+        if cyp2c9_2_count:
+            detected.append(_format_pgx_hit("CYP2C9*2", "rs1799853", cyp2c9_2, "T", variant_lookup))
+        if cyp2c9_3_count:
+            detected.append(_format_pgx_hit("CYP2C9*3", "rs1057910", cyp2c9_3, "C", variant_lookup))
+        if cyp2c9_5_count:
+            detected.append(_format_pgx_hit("CYP2C9*5", "rs28371686", cyp2c9_5, "G", variant_lookup))
+        if cyp2c9_8_count:
+            detected.append(_format_pgx_hit("CYP2C9*8", "rs7900194", cyp2c9_8, "A", variant_lookup))
+        if cyp2c9_11_count:
+            detected.append(_format_pgx_hit("CYP2C9*11", "rs28371685", cyp2c9_11, "T", variant_lookup))
         cards.append(
             _risk_card(
                 "CYP2C9 Reduced Function",
@@ -315,14 +624,14 @@ def _build_risk_cards(
                 "CYP2C9 decreased-function allele(s) detected ("
                 + ", ".join(detected)
                 + "); affects warfarin and some NSAID dosing.",
-                "Use CPIC-guided dosing if these drugs are prescribed.",
+                f"{warfarin_action_guidance} {warfarin_panel_status}",
                 evidence="CPIC",
                 category="clinical",
             )
         )
 
     factor_v = genotypes.get("rs6025")
-    if _has_allele(factor_v, "A"):
+    if _risk_allele_present("rs6025", factor_v, "A", variant_lookup):
         cards.append(
             _risk_card(
                 "Clotting Risk",
@@ -335,12 +644,19 @@ def _build_risk_cards(
         )
 
     prothrombin = genotypes.get("rs1799963")
-    if _has_allele(prothrombin, "A"):
+    if _risk_allele_present("rs1799963", prothrombin, "A", variant_lookup):
+        prothrombin_hit = _format_pgx_hit(
+            "Prothrombin G20210A",
+            "rs1799963",
+            prothrombin,
+            "A",
+            variant_lookup,
+        )
         cards.append(
             _risk_card(
                 "Clotting Risk",
                 "high",
-                "Prothrombin G20210A variant detected; elevated venous thrombosis risk.",
+                f"{prothrombin_hit} detected; elevated venous thrombosis risk.",
                 "Inform clinician before surgery or hormone therapy.",
                 evidence="ClinGen",
                 category="clinical",
@@ -350,8 +666,20 @@ def _build_risk_cards(
     cyp2c19_2 = genotypes.get("rs4244285")
     cyp2c19_3 = genotypes.get("rs4986893")
     cyp2c19_17 = genotypes.get("rs12248560")
-    lof_count = _allele_count(cyp2c19_2, "A") + _allele_count(cyp2c19_3, "A")
-    inc_count = _allele_count(cyp2c19_17, "T")
+    cyp2c19_2_count = _risk_allele_count("rs4244285", cyp2c19_2, "A", variant_lookup)
+    cyp2c19_3_count = _risk_allele_count("rs4986893", cyp2c19_3, "A", variant_lookup)
+    cyp2c19_17_count = _risk_allele_count("rs12248560", cyp2c19_17, "T", variant_lookup)
+    lof_count = cyp2c19_2_count + cyp2c19_3_count
+    inc_count = cyp2c19_17_count
+    cyp2c19_missing = [
+        rsid
+        for rsid, gt in (
+            ("rs4244285", cyp2c19_2),
+            ("rs4986893", cyp2c19_3),
+            ("rs12248560", cyp2c19_17),
+        )
+        if gt is None
+    ]
     if lof_count >= 2:
         phenotype = "Likely poor metabolizer"
         level = "high"
@@ -367,26 +695,42 @@ def _build_risk_cards(
 
     if lof_count >= 1:
         detected = []
-        if _has_allele(cyp2c19_2, "A"):
-            detected.append("CYP2C19*2")
-        if _has_allele(cyp2c19_3, "A"):
-            detected.append("CYP2C19*3")
-        cards.append(
-            _risk_card(
-                "Clopidogrel Response",
-                level,
-                f"{' / '.join(detected)} detected; {phenotype}. Reduced clopidogrel activation.",
-                "Discuss CPIC-guided antiplatelet selection with a clinician.",
-                evidence="CPIC",
-                category="clinical",
+        if cyp2c19_2_count:
+            detected.append(_format_pgx_hit("CYP2C19*2", "rs4244285", cyp2c19_2, "A", variant_lookup))
+        if cyp2c19_3_count:
+            detected.append(_format_pgx_hit("CYP2C19*3", "rs4986893", cyp2c19_3, "A", variant_lookup))
+        if detected:
+            coverage_note = ""
+            if cyp2c19_missing:
+                coverage_note = (
+                    " Phenotype based on partial CYP2C19 panel; "
+                    f"missing {', '.join(cyp2c19_missing)}."
+                )
+            cards.append(
+                _risk_card(
+                    "Clopidogrel Response",
+                    level,
+                    f"{' / '.join(detected)} detected; {phenotype}. Reduced clopidogrel activation."
+                    f"{coverage_note}",
+                    "Discuss CPIC-guided antiplatelet selection with a clinician.",
+                    evidence="CPIC",
+                    category="clinical",
+                )
             )
-        )
     elif inc_count >= 1:
+        coverage_note = ""
+        if cyp2c19_missing:
+            coverage_note = (
+                " Phenotype based on partial CYP2C19 panel; "
+                f"missing {', '.join(cyp2c19_missing)}."
+            )
         cards.append(
             _risk_card(
                 "CYP2C19 Increased Function",
                 "med",
-                f"CYP2C19*17 detected; {phenotype}. Altered exposure for some CYP2C19 substrates.",
+                f"{_format_pgx_hit('CYP2C19*17', 'rs12248560', cyp2c19_17, 'T', variant_lookup)} detected; {phenotype}. "
+                "Altered exposure for some CYP2C19 substrates."
+                f"{coverage_note}",
                 "Consider CPIC guidance for CYP2C19 substrates (e.g., PPIs, voriconazole).",
                 evidence="CPIC",
                 category="clinical",
@@ -417,7 +761,7 @@ def _build_risk_cards(
                 "Warfarin Sensitivity",
                 level,
                 f"VKORC1 rs9923231 ({vkorc1}): increased warfarin sensitivity.",
-                "Warfarin dosing should follow CPIC genotype-guided algorithms.",
+                f"{warfarin_action_guidance} {warfarin_panel_status}",
                 evidence="CPIC",
                 category="clinical",
             )
@@ -425,11 +769,12 @@ def _build_risk_cards(
 
     cyp3a5 = genotypes.get("rs776746")
     if _risk_allele_present("rs776746", cyp3a5, "A", variant_lookup):
+        cyp3a5_hit = _format_pgx_hit("CYP3A5", "rs776746", cyp3a5, "A", variant_lookup)
         cards.append(
             _risk_card(
                 "Tacrolimus Metabolism",
                 "med",
-                f"CYP3A5 rs776746 ({cyp3a5}): expresser genotype; higher tacrolimus clearance.",
+                f"{cyp3a5_hit}; expresser phenotype with higher tacrolimus clearance.",
                 "Tacrolimus dosing should follow CPIC CYP3A5 guidance.",
                 evidence="CPIC",
                 category="clinical",
@@ -439,18 +784,30 @@ def _build_risk_cards(
     cyp2b6_516 = genotypes.get("rs3745274")
     cyp2b6_785 = genotypes.get("rs2279343")
     cyp2b6_markers = []
-    if _has_allele(cyp2b6_516, "T"):
-        cyp2b6_markers.append("rs3745274")
-    if _has_allele(cyp2b6_785, "G"):
-        cyp2b6_markers.append("rs2279343")
+    if _risk_allele_present("rs3745274", cyp2b6_516, "T", variant_lookup):
+        cyp2b6_markers.append(_format_pgx_hit("CYP2B6 516G>T", "rs3745274", cyp2b6_516, "T", variant_lookup))
+    if _risk_allele_present("rs2279343", cyp2b6_785, "G", variant_lookup):
+        cyp2b6_markers.append(_format_pgx_hit("CYP2B6 785A>G", "rs2279343", cyp2b6_785, "G", variant_lookup))
     if cyp2b6_markers:
+        cyp2b6_missing = [
+            rsid
+            for rsid, gt in (("rs3745274", cyp2b6_516), ("rs2279343", cyp2b6_785))
+            if gt is None
+        ]
+        coverage_note = ""
+        if cyp2b6_missing:
+            coverage_note = (
+                " Partial CYP2B6 panel; phenotype may be incomplete "
+                f"(missing {', '.join(cyp2b6_missing)})."
+            )
         cards.append(
             _risk_card(
                 "Efavirenz Metabolism",
                 "med",
                 "CYP2B6 decreased-function marker(s) detected ("
                 + ", ".join(cyp2b6_markers)
-                + ").",
+                + ")."
+                + coverage_note,
                 "Efavirenz dosing should follow CPIC CYP2B6 guidance; full haplotyping may be needed.",
                 evidence="CPIC",
                 category="clinical",
@@ -461,9 +818,9 @@ def _build_risk_cards(
     ugt1a1_proxy = genotypes.get("rs887829")
     ugt1a1_hits = []
     if _risk_allele_present("rs4148323", ugt1a1, "A", variant_lookup):
-        ugt1a1_hits.append("UGT1A1*6 (rs4148323)")
+        ugt1a1_hits.append(_format_pgx_hit("UGT1A1*6", "rs4148323", ugt1a1, "A", variant_lookup))
     if _has_allele(ugt1a1_proxy, "T"):
-        ugt1a1_hits.append("UGT1A1*28 proxy (rs887829)")
+        ugt1a1_hits.append(_format_pgx_hit("UGT1A1*28 proxy", "rs887829", ugt1a1_proxy, "T", variant_lookup))
     if ugt1a1_hits:
         cards.append(
             _risk_card(
@@ -522,7 +879,7 @@ def _build_risk_cards(
                 "Warfarin Dose Modifier (CYP4F2)",
                 "low",
                 f"CYP4F2 rs2108622 ({cyp4f2}) detected; may increase warfarin dose requirement.",
-                "Use CPIC genotype-guided warfarin algorithms for dosing.",
+                f"{warfarin_action_guidance} {warfarin_panel_status}",
                 evidence="CPIC",
                 category="clinical",
             )
@@ -535,29 +892,37 @@ def _build_risk_cards(
                 "Warfarin Dose Modifier (rs12777823)",
                 "med",
                 f"rs12777823 ({cyp2c_cluster}) detected; dose modifier most relevant in African ancestry.",
-                "If African ancestry, use CPIC warfarin guidance; otherwise interpret cautiously.",
+                f"{warfarin_action_guidance} {warfarin_panel_status}",
                 evidence="CPIC",
                 category="clinical",
             )
         )
 
     dpyd_variants: list[str] = []
-    if _risk_allele_present("rs3918290", genotypes.get("rs3918290"), "A", variant_lookup):
-        dpyd_variants.append("rs3918290 (*2A)")
-    if _risk_allele_present("rs67376798", genotypes.get("rs67376798"), "A", variant_lookup):
-        dpyd_variants.append("rs67376798 (c.2846A>T)")
-    if _risk_allele_present("rs55886062", genotypes.get("rs55886062"), "G", variant_lookup):
-        dpyd_variants.append("rs55886062 (c.1679T>G)")
-    if _risk_allele_present("rs56038477", genotypes.get("rs56038477"), "A", variant_lookup):
-        dpyd_variants.append("rs56038477 (HapB3 tag)")
-    if _risk_allele_present("rs75017182", genotypes.get("rs75017182"), "G", variant_lookup):
-        dpyd_variants.append("rs75017182 (HapB3)")
+    dpyd_markers = [
+        ("rs3918290", "A", "DPYD*2A"),
+        ("rs67376798", "T", "DPYD c.2846A>T"),
+        ("rs55886062", "G", "DPYD c.1679T>G"),
+        ("rs56038477", "A", "DPYD HapB3 tag"),
+        ("rs75017182", "G", "DPYD HapB3"),
+    ]
+    dpyd_missing: list[str] = []
+    for rsid, risk_allele, label in dpyd_markers:
+        genotype = genotypes.get(rsid)
+        if genotype is None:
+            dpyd_missing.append(rsid)
+            continue
+        if _risk_allele_present(rsid, genotype, risk_allele, variant_lookup):
+            dpyd_variants.append(_format_pgx_hit(label, rsid, genotype, risk_allele, variant_lookup))
     if dpyd_variants:
+        dpyd_coverage_note = ""
+        if dpyd_missing:
+            dpyd_coverage_note = f" Partial DPYD panel; missing {', '.join(dpyd_missing)}."
         cards.append(
             _risk_card(
                 "Fluoropyrimidine Toxicity",
                 "high",
-                "DPYD variant(s) detected: " + ", ".join(dpyd_variants) + ".",
+                "DPYD variant(s) detected: " + ", ".join(dpyd_variants) + "." + dpyd_coverage_note,
                 "Confirm with clinical-grade DPYD testing before 5-FU/capecitabine; dosing changes may be needed.",
                 evidence="CPIC",
                 category="clinical",
@@ -568,20 +933,53 @@ def _build_risk_cards(
     tpmt_3b = genotypes.get("rs1800460")
     tpmt_3c = genotypes.get("rs1142345")
     nudt15 = genotypes.get("rs116855232")
-    tpmt_variant_count = (
-        _allele_count(tpmt_2, "C")
-        + _allele_count(tpmt_3b, "A")
-        + _allele_count(tpmt_3c, "G")
-    )
-    nudt15_variant_count = _allele_count(nudt15, "T")
-    thiopurine_count = tpmt_variant_count + nudt15_variant_count
-    if thiopurine_count:
+    tpmt_2_count = _risk_allele_count("rs1800462", tpmt_2, "C", variant_lookup)
+    tpmt_3b_count = _risk_allele_count("rs1800460", tpmt_3b, "A", variant_lookup)
+    tpmt_3c_count = _risk_allele_count("rs1142345", tpmt_3c, "G", variant_lookup)
+    nudt15_count = _risk_allele_count("rs116855232", nudt15, "T", variant_lookup)
+    thiopurine_count = tpmt_2_count + tpmt_3b_count + tpmt_3c_count + nudt15_count
+    thiopurine_hits: list[str] = []
+    if tpmt_2_count:
+        thiopurine_hits.append(_format_pgx_hit("TPMT*2", "rs1800462", tpmt_2, "C", variant_lookup))
+    if tpmt_3b_count:
+        thiopurine_hits.append(_format_pgx_hit("TPMT*3B", "rs1800460", tpmt_3b, "A", variant_lookup))
+    if tpmt_3c_count:
+        thiopurine_hits.append(_format_pgx_hit("TPMT*3C", "rs1142345", tpmt_3c, "G", variant_lookup))
+    if nudt15_count:
+        thiopurine_hits.append(_format_pgx_hit("NUDT15", "rs116855232", nudt15, "T", variant_lookup))
+    tpmt_missing = [
+        rsid
+        for rsid, gt in (
+            ("rs1800462", tpmt_2),
+            ("rs1800460", tpmt_3b),
+            ("rs1142345", tpmt_3c),
+            ("rs116855232", nudt15),
+        )
+        if gt is None
+    ]
+    if thiopurine_count and thiopurine_hits:
+        coverage_note = ""
+        if tpmt_missing:
+            missing_tpmt = {"rs1800462", "rs1800460", "rs1142345"}
+            has_partial_tpmt = any(rsid in missing_tpmt for rsid in tpmt_missing)
+            coverage_note = (
+                " Partial TPMT panel; phenotype may be incomplete "
+                f"(missing {', '.join(tpmt_missing)})."
+            )
+            if not has_partial_tpmt:
+                coverage_note = (
+                    " Partial TPMT/NUDT15 panel; phenotype may be incomplete "
+                    f"(missing {', '.join(tpmt_missing)})."
+                )
         level = "med" if thiopurine_count == 1 else "high"
         cards.append(
             _risk_card(
                 "Thiopurine Toxicity",
                 level,
-                "TPMT/NUDT15 variant allele(s) detected; higher thiopurine toxicity risk.",
+                "TPMT/NUDT15 variant(s) detected: "
+                + ", ".join(thiopurine_hits)
+                + "."
+                + coverage_note,
                 "Thiopurine dosing should follow CPIC-guided genotype adjustments.",
                 evidence="CPIC",
                 category="clinical",
@@ -591,11 +989,11 @@ def _build_risk_cards(
     hbb = genotypes.get("rs334")
     if hbb and "T" in hbb:
         if hbb == "TT":
-            description = "HbS/HbS genotype detected; high risk for sickle cell disease."
+            description = "HbS/HbS genotype detected (rs334 TT); high risk for sickle cell disease."
             level = "high"
             action = "Confirm with clinical hemoglobin testing; disease-level genotype requires clinical care."
         else:
-            description = "HbS variant detected; likely sickle cell trait (carrier)."
+            description = f"HbS variant detected (rs334 {hbb}); likely sickle cell trait (carrier)."
             level = "med"
             action = "Confirm with clinical hemoglobin testing; carrier screening context."
         cards.append(
@@ -611,18 +1009,30 @@ def _build_risk_cards(
 
     serpina1_z = genotypes.get("rs28929474")
     serpina1_s = genotypes.get("rs17580")
-    if (serpina1_z and "A" in serpina1_z) or (serpina1_s and "T" in serpina1_s):
+    serpina1_z_hit = _risk_allele_present("rs28929474", serpina1_z, "A", variant_lookup)
+    serpina1_s_hit = _risk_allele_present("rs17580", serpina1_s, "T", variant_lookup)
+    if serpina1_z_hit or serpina1_s_hit:
         details = []
-        if serpina1_z and "A" in serpina1_z:
-            details.append("Pi*Z")
-        if serpina1_s and "T" in serpina1_s:
-            details.append("Pi*S")
+        if serpina1_z_hit:
+            details.append(_format_pgx_hit("Pi*Z", "rs28929474", serpina1_z, "A", variant_lookup))
+        if serpina1_s_hit:
+            details.append(_format_pgx_hit("Pi*S", "rs17580", serpina1_s, "T", variant_lookup))
+        if serpina1_z_hit:
+            description = (
+                "SERPINA1 variant(s) detected (" + ", ".join(details) + "). "
+                "Potential AAT deficiency signal; clinical severity depends on serum AAT level and full typing."
+            )
+        else:
+            description = (
+                "SERPINA1 variant(s) detected (" + ", ".join(details) + "). "
+                "Pi*S/S screening result may indicate mild AAT reduction; serum AAT level determines significance."
+            )
         cards.append(
             _risk_card(
                 "Alpha-1 Antitrypsin Deficiency",
                 "med",
-                "SERPINA1 variant(s) detected (" + ", ".join(details) + ").",
-                "Confirm with clinical AAT testing; avoid smoking and discuss with clinician.",
+                description,
+                "Confirm with serum AAT testing; consider full SERPINA1 typing if needed. Avoid smoking.",
                 evidence="ClinVar",
                 category="clinical",
             )
@@ -711,7 +1121,7 @@ def _build_risk_cards(
             _risk_card(
                 "Addiction Risk",
                 "high",
-                "CHRNA5 (AA): increased susceptibility to nicotine dependence if exposed.",
+                f"CHRNA5 rs16969968 ({chRNA5}): increased susceptibility to nicotine dependence if exposed.",
                 "Avoid nicotine initiation; add support if quitting.",
                 evidence="GWAS",
                 category="association",
@@ -725,7 +1135,7 @@ def _build_risk_cards(
             _risk_card(
                 "Methylation",
                 "med",
-                "MTHFR compound heterozygote (AG + GT).",
+                "MTHFR compound heterozygote: rs1801133 AG + rs1801131 GT.",
                 "Consider homocysteine testing if clinically indicated.",
                 evidence="Low/Contested",
                 category="association",
@@ -738,7 +1148,7 @@ def _build_risk_cards(
             _risk_card(
                 "Heart Health",
                 "med",
-                "Lp(a) risk allele detected (rs10455872).",
+                f"LPA rs10455872 ({lpa}): risk allele detected.",
                 "Consider one-time Lp(a) blood test.",
                 evidence="GWAS",
                 category="association",
@@ -751,7 +1161,7 @@ def _build_risk_cards(
             _risk_card(
                 "Vision",
                 "med",
-                "CFH (CT): AMD risk allele present.",
+                f"CFH rs1061170 ({cfh}): AMD risk allele present.",
                 "UV protection, leafy greens, avoid smoking.",
                 evidence="GWAS",
                 category="association",
@@ -764,7 +1174,7 @@ def _build_risk_cards(
             _risk_card(
                 "Early Heart Attack",
                 "low",
-                "9p21 (GG): protective genotype.",
+                f"9p21 CAD locus rs1333049 ({ninep21}): protective genotype.",
                 "Good baseline; maintain heart-healthy habits.",
                 evidence="GWAS",
                 category="association",
@@ -842,6 +1252,8 @@ def _wellness_emoji(label: str) -> str:
     return "✨"
 
 def _panel_display_name(panel_name: str) -> str:
+    if panel_name == "Functional Health - Methylation":
+        return "B-vitamin / Homocysteine pathway"
     return panel_name.replace("Functional Health - ", "").strip()
 
 
@@ -920,9 +1332,8 @@ def _panel_summary_row(
 ) -> dict[str, str | None] | None:
     if not entries:
         return None
-    if panel_name == "Functional Health - Detox/Acetylation":
-        return None
     risk_rsids = []
+    proxy_rsids = []
     missing_rsids = []
     non_snp_calls: dict[str, str] = {}
     non_snp_genotypes = non_snp_genotypes or {}
@@ -930,11 +1341,16 @@ def _panel_summary_row(
         rsid = entry.get("rsid", "")
         effect_allele = entry.get("effect_allele") or ""
         genotype = genotypes.get(rsid)
+        non_snp_call = non_snp_genotypes.get(rsid)
+        flags = _variant_flags(rsid, genotype, non_snp_call, variant_lookup)
         if not genotype:
-            if rsid in non_snp_genotypes:
-                non_snp_calls[rsid] = non_snp_genotypes[rsid]
+            if non_snp_call:
+                non_snp_calls[rsid] = non_snp_call
             else:
                 missing_rsids.append(rsid)
+            continue
+        if flags["is_proxy"]:
+            proxy_rsids.append(rsid)
             continue
         if effect_allele and _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
             risk_rsids.append(rsid)
@@ -944,18 +1360,25 @@ def _panel_summary_row(
     elif missing_rsids or non_snp_calls:
         status = "missing"
         summary_value = "Incomplete screen"
+    elif proxy_rsids:
+        status = "proxy"
+        summary_value = "Proxy marker(s) present"
     else:
         status = "protective"
-        summary_value = "No risk markers detected"
+        summary_value = "No high-confidence adverse flags detected in this screened set"
 
     detail_parts = []
     if risk_rsids:
         detail_parts.append(f"Risk markers: {', '.join(risk_rsids)}")
+    if proxy_rsids:
+        detail_parts.append(f"Proxy markers: {', '.join(proxy_rsids)}")
     if missing_rsids:
         detail_parts.append(f"Missing markers: {', '.join(missing_rsids)}")
     if non_snp_calls:
         calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_calls.items())
         detail_parts.append(f"Non-SNP calls: {calls}")
+    if panel_name == "Functional Health - Methylation":
+        detail_parts.append("MTHFR markers are reported separately in Lifestyle & Genetic Associations.")
     detail = "; ".join(detail_parts) if detail_parts else None
 
     return {
@@ -989,14 +1412,23 @@ def _panel_rows(
         non_snp_call = None
         if not genotype and non_snp_genotypes:
             non_snp_call = non_snp_genotypes.get(rsid)
+        flags = _variant_flags(rsid, genotype, non_snp_call, variant_lookup)
         effect_allele = entry.get("effect_allele") or ""
         effect_trait = entry.get("effect_trait") or ""
         non_effect_trait = entry.get("non_effect_trait") or ""
         evidence_note = entry.get("evidence_note") or ""
         notes = entry.get("notes") or ""
-
-        if rsid == "rs4349859" or "autoimmune thyroid risk" in label.lower():
-            prefer_conclusion = True
+        nat2_marker = bool(
+            panel_name == "Functional Health - Detox/Acetylation"
+            and rsid in _NAT2_RSIDS
+        )
+        if nat2_marker:
+            label = "NAT2 SNP (partial panel)"
+        use_conclusion = (
+            prefer_conclusion
+            or rsid == "rs4349859"
+            or "autoimmune thyroid risk" in label.lower()
+        )
 
         status = "neutral"
         detail = None
@@ -1023,21 +1455,44 @@ def _panel_rows(
                 value = "Not assessed"
                 status = "missing"
                 indicator = "Not assessed"
+        elif include_indicators and flags["is_proxy"]:
+            value = "Proxy marker"
+            status = "proxy"
+            indicator = "Proxy marker"
+            if rsid == "rs4349859":
+                detail = (
+                    "Proxy-marker interpretation depends on ancestry and allele orientation; "
+                    "confirm with clinical HLA-B27 typing if relevant."
+                )
+            else:
+                detail = (
+                    "Proxy-marker interpretation depends on ancestry and allele orientation; "
+                    "confirm clinically if relevant."
+                )
+        elif nat2_marker:
+            value = "NAT2 SNP observed (partial panel)"
+            status = "info"
+            if include_indicators:
+                indicator = "Genotype observed"
+            detail = (
+                "This marker contributes to NAT2 screening, but single-SNP calls do not "
+                "define acetylator phenotype without full haplotyping."
+            )
         elif effect_allele and (effect_trait or non_effect_trait):
             allele_count = sum(1 for allele in genotype if allele == effect_allele)
             risk_present = _risk_allele_present(rsid, genotype, effect_allele, variant_lookup)
             if allele_count == 0 and non_effect_trait:
-                if prefer_conclusion:
+                if use_conclusion:
                     value = non_effect_trait
                 else:
                     value = f"Genotype {genotype}"
                     detail = non_effect_trait
                 if include_indicators:
-                    value = "No risk allele"
+                    value = "No high-confidence adverse flags in screened set"
                     status = "protective"
-                    indicator = "No risk allele"
+                    indicator = "No high-confidence adverse flags"
             elif allele_count >= 1 and effect_trait:
-                if prefer_conclusion:
+                if use_conclusion:
                     value = effect_trait
                 else:
                     value = f"Genotype {genotype}"
@@ -1067,18 +1522,16 @@ def _panel_rows(
             detail_lines.append(detail)
         if evidence_note and (risk_present or (allele_count or 0) > 0):
             detail_lines.append(evidence_note)
-        if include_indicators and indicator == "No risk allele":
-            detail_lines.append("If symptoms persist despite no risk allele, consider clinical evaluation.")
+        if include_indicators and indicator == "No high-confidence adverse flags":
+            detail_lines.append("If symptoms persist, consider clinical evaluation.")
         if notes and genotype and "proxy" in notes.lower():
             detail_lines.append(notes)
-        if notes and genotype and "verify strand" in notes.lower():
-            detail_lines.append("Strand caution: verify orientation before interpreting.")
         if non_snp_call and notes and any(term in notes.lower() for term in ("indel", "repeat")):
             detail_lines.append(notes)
 
         detail = " ".join(detail_lines) if detail_lines else None
 
-        if rsid == "rs4349859" and genotype:
+        if rsid == "rs4349859" and genotype and not (include_indicators and flags["is_proxy"]):
             proxy_note = (
                 "Tag SNP for HLA-B*27; ancestry-dependent. "
                 "Confirm with clinical HLA-B27 testing if symptoms or family history."
@@ -1088,18 +1541,14 @@ def _panel_rows(
                 status = "proxy"
                 indicator = "Proxy marker"
 
-        proxy_note = None
-        if variant_lookup and rsid in variant_lookup:
-            match_status = variant_lookup[rsid].get("match_status")
-            proxy_note = variant_lookup[rsid].get("proxy_note")
-            if match_status in {"reverse_complement", "mismatch"}:
-                caution_note = "Strand caution: reference orientation differs."
-                detail = f"{caution_note} {detail}".strip() if detail else caution_note
-                if include_indicators:
-                    status = "caution"
-                    indicator = "Strand caution"
-        if proxy_note and (genotype or non_snp_call):
-            detail = f"{detail} {proxy_note}".strip() if detail else proxy_note
+        if flags["is_strand_caution"]:
+            caution_note = "Strand caution: reference orientation differs."
+            detail = f"{caution_note} {detail}".strip() if detail else caution_note
+            if include_indicators:
+                status = "caution"
+                indicator = "Strand caution"
+        if flags["is_proxy"] and flags["proxy_note"]:
+            detail = f"{detail} {flags['proxy_note']}".strip() if detail else flags["proxy_note"]
 
         rows.append({
             "label": label,
@@ -1123,6 +1572,7 @@ def _hidden_screening_rows(
     variant_lookup: dict[str, dict[str, Any]] | None,
     *,
     sex: str | None,
+    qc_sex: str | None = None,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     records = hidden.get("records", [])
@@ -1140,19 +1590,28 @@ def _hidden_screening_rows(
         effect_allele = entry.get("effect_allele") or ""
         label = entry.get("label", "Risk marker")
         note = ""
+        row_sub = ""
         if genotype:
             if not effect_allele:
                 continue
             if _risk_allele_present(rsid, genotype, effect_allele, variant_lookup):
                 continue
-            value = entry.get("non_effect_trait") or "No risk allele detected"
+            value = f"No risk allele detected at {rsid}"
             status = "protective"
             sub_value = genotype
+            note = "Screening-level; other variants not assessed."
+            row_sub = sub_value
         else:
             value = "Not assessed (non-SNP call)"
             status = "missing"
             sub_value = non_snp_call or "Not Found"
-            note = "Indel call observed; not interpreted. Confirm with clinical testing."
+            placeholder = non_snp_call or "non-SNP"
+            note = (
+                f"Present in raw file as {placeholder} placeholder; "
+                "cannot be interpreted from SNP array; treat as not assessed. "
+                "Confirm with clinical testing."
+            )
+            row_sub = f"{rsid} {sub_value}"
 
         if rsid in {"rs1050828", "rs1050829"}:
             if sex == "male":
@@ -1160,13 +1619,16 @@ def _hidden_screening_rows(
             elif sex == "female":
                 sex_note = "X-linked; females may be carriers or affected depending on X-inactivation."
             else:
-                sex_note = "X-linked; sex not specified, interpret cautiously."
+                if qc_sex:
+                    sex_note = f"X-linked; reported sex missing. QC inferred {qc_sex} (for QC only)."
+                else:
+                    sex_note = "X-linked; sex not specified, interpret cautiously."
             note = f"{note} {sex_note}".strip() if note else sex_note
         rows.append(
             {
                 "label": label,
                 "value": value,
-                "sub": f"{rsid} {sub_value}",
+                "sub": row_sub,
                 "note": note,
                 "status": status,
             }
@@ -1196,81 +1658,129 @@ def _demographics_notice(summary: dict[str, Any]) -> str | None:
     if not missing:
         return None
     items = ", ".join(missing)
-    return f"Demographics missing: {items}. Provide them to enable hormone-related or age-stratified notes."
+    note = (
+        f"Reported demographics missing: {items}. "
+        "Provide them to enable hormone-related or age-stratified notes."
+    )
+    if "sex" in missing:
+        sex_inference = summary.get("sex_inference")
+        if isinstance(sex_inference, str) and sex_inference.strip():
+            note = f"{note} QC inferred sex: {sex_inference} (for QC only)."
+    return note
 
 
 def _coverage_notes(
     genotypes: dict[str, str],
     non_snp_genotypes: dict[str, str],
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     critical = [
-        {"label": "APOE haplotype", "rsids": ["rs429358", "rs7412"], "proxy": None},
-        {"label": "CYP2C19*2 (clopidogrel)", "rsids": ["rs4244285"], "proxy": None},
-        {"label": "CYP2C19*3", "rsids": ["rs4986893"], "proxy": None},
-        {"label": "CYP2C19*17", "rsids": ["rs12248560"], "proxy": None},
-        {"label": "SLCO1B1 (statin myopathy)", "rsids": ["rs4149056"], "proxy": None},
-        {"label": "VKORC1 (warfarin)", "rsids": ["rs9923231"], "proxy": None},
-        {"label": "CYP4F2*3 (warfarin modifier)", "rsids": ["rs2108622"], "proxy": None},
+        {"label": "APOE haplotype", "rsids": ["rs429358", "rs7412"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2C19*2 (clopidogrel)", "rsids": ["rs4244285"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2C19*3", "rsids": ["rs4986893"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2C19*17", "rsids": ["rs12248560"], "proxy": None, "bucket": "missing"},
+        {"label": "SLCO1B1 (statin myopathy)", "rsids": ["rs4149056"], "proxy": None, "bucket": "missing"},
+        {"label": "VKORC1 (warfarin)", "rsids": ["rs9923231"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP4F2*3 (warfarin modifier)", "rsids": ["rs2108622"], "proxy": None, "bucket": "missing"},
         {
             "label": "Warfarin ancestry modifier (rs12777823)",
             "rsids": ["rs12777823"],
             "proxy": "Ancestry-dependent dose modifier.",
+            "bucket": "missing",
+            "note_when_present": False,
         },
-        {"label": "CYP2C9*5", "rsids": ["rs28371686"], "proxy": None},
-        {"label": "CYP2C9*6", "rsids": ["rs9332131"], "proxy": "Indel; not reliably called on arrays."},
-        {"label": "CYP2C9*8", "rsids": ["rs7900194"], "proxy": None},
-        {"label": "CYP2C9*11", "rsids": ["rs28371685"], "proxy": None},
-        {"label": "TPMT*2", "rsids": ["rs1800462"], "proxy": None},
-        {"label": "ABCG2 Q141K", "rsids": ["rs2231142"], "proxy": None},
-        {"label": "DPYD*2A (fluoropyrimidines)", "rsids": ["rs3918290"], "proxy": None},
-        {"label": "DPYD c.2846A>T", "rsids": ["rs67376798"], "proxy": None},
-        {"label": "DPYD c.1679T>G", "rsids": ["rs55886062"], "proxy": None},
-        {"label": "DPYD HapB3 tag", "rsids": ["rs56038477", "rs75017182"], "proxy": None},
-        {"label": "CYP3A5*3 (tacrolimus)", "rsids": ["rs776746"], "proxy": None},
-        {"label": "CYP2B6 516G>T / 785A>G", "rsids": ["rs3745274", "rs2279343"], "proxy": None},
-        {"label": "UGT1A1*6 (atazanavir)", "rsids": ["rs4148323"], "proxy": None},
-        {"label": "UGT1A1*28 proxy", "rsids": ["rs887829"], "proxy": "Proxy SNP used (rs887829)."},
+        {"label": "CYP2C9*5", "rsids": ["rs28371686"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2C9*6", "rsids": ["rs9332131"], "proxy": "Indel; not reliably called on arrays.", "bucket": "expected"},
+        {"label": "CYP2C9*8", "rsids": ["rs7900194"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2C9*11", "rsids": ["rs28371685"], "proxy": None, "bucket": "missing"},
+        {"label": "TPMT*2", "rsids": ["rs1800462"], "proxy": None, "bucket": "missing"},
+        {"label": "ABCG2 Q141K", "rsids": ["rs2231142"], "proxy": None, "bucket": "missing"},
+        {"label": "DPYD*2A (fluoropyrimidines)", "rsids": ["rs3918290"], "proxy": None, "bucket": "missing"},
+        {"label": "DPYD c.2846A>T", "rsids": ["rs67376798"], "proxy": None, "bucket": "missing"},
+        {"label": "DPYD c.1679T>G", "rsids": ["rs55886062"], "proxy": None, "bucket": "missing"},
+        {"label": "DPYD HapB3 tag", "rsids": ["rs56038477", "rs75017182"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP3A5*3 (tacrolimus)", "rsids": ["rs776746"], "proxy": None, "bucket": "missing"},
+        {"label": "CYP2B6 516G>T / 785A>G", "rsids": ["rs3745274", "rs2279343"], "proxy": None, "bucket": "missing"},
+        {"label": "UGT1A1*6 (atazanavir)", "rsids": ["rs4148323"], "proxy": None, "bucket": "missing"},
+        {"label": "UGT1A1*28 proxy", "rsids": ["rs887829"], "proxy": "Proxy SNP used (rs887829).", "bucket": "expected"},
         {
             "label": "UGT1A1*28 TA repeat",
             "rsids": ["rs8175347"],
             "proxy": "TA repeat indel; not reliably called on arrays.",
+            "bucket": "expected",
         },
-        {"label": "HLA-B*57:01 (abacavir)", "rsids": ["rs2395029"], "proxy": "Proxy SNP used (rs2395029)."},
+        {
+            "label": "HLA-B*57:01 (abacavir)",
+            "rsids": ["rs2395029"],
+            "proxy": "Proxy SNP used (rs2395029).",
+            "bucket": "expected",
+        },
         {
             "label": "HLA-B*15:02 (carbamazepine)",
             "rsids": ["rs2844682", "rs3909184"],
             "proxy": "Proxy tag SNPs; ancestry-dependent.",
+            "bucket": "expected",
         },
         {
             "label": "HLA-A*31:01 (carbamazepine)",
             "rsids": ["rs1061235"],
             "proxy": "Proxy tag SNP; ancestry-dependent.",
+            "bucket": "expected",
         },
         {
             "label": "HLA-B*58:01 (allopurinol)",
             "rsids": ["rs9263726"],
             "proxy": "Proxy tag SNP; ancestry-dependent.",
+            "bucket": "missing",
         },
-        {"label": "HLA-B27 (ankylosing spondylitis)", "rsids": ["rs4349859"], "proxy": "Proxy SNP used (rs4349859)."},
-        {"label": "CFH (AMD)", "rsids": ["rs1061170"], "proxy": None},
-        {"label": "ARMS2 (AMD)", "rsids": ["rs10490924"], "proxy": None},
-        {"label": "Factor V Leiden", "rsids": ["rs6025"], "proxy": None},
-        {"label": "Prothrombin G20210A", "rsids": ["rs1799963"], "proxy": None},
-        {"label": "Sickle cell (HbS)", "rsids": ["rs334"], "proxy": None},
-        {"label": "CFTR F508del", "rsids": ["rs113993960"], "proxy": "Indel; not reliably called on arrays."},
-        {"label": "SERPINA1 Pi*Z", "rsids": ["rs28929474"], "proxy": None},
-        {"label": "SERPINA1 Pi*S", "rsids": ["rs17580"], "proxy": None},
-        {"label": "G6PD c.202G>A", "rsids": ["rs1050828"], "proxy": None},
-        {"label": "G6PD c.376A>G", "rsids": ["rs1050829"], "proxy": None},
-        {"label": "APOB R3500Q", "rsids": ["rs5742904"], "proxy": None},
-        {"label": "BRCA1 5382insC", "rsids": ["rs80357906"], "proxy": "Indel; not reliably called on arrays."},
-        {"label": "BRCA2 6174delT", "rsids": ["rs80359550"], "proxy": "Indel; not reliably called on arrays."},
-        {"label": "APC I1307K", "rsids": ["rs1801155"], "proxy": None},
-        {"label": "CHEK2 I157T", "rsids": ["rs17879961"], "proxy": None},
+        {
+            "label": "HLA-B27 (ankylosing spondylitis)",
+            "rsids": ["rs4349859"],
+            "proxy": "Proxy SNP used (rs4349859).",
+            "bucket": "expected",
+        },
+        {"label": "CFH (AMD)", "rsids": ["rs1061170"], "proxy": None, "bucket": "missing"},
+        {"label": "ARMS2 (AMD)", "rsids": ["rs10490924"], "proxy": None, "bucket": "missing"},
+        {"label": "Factor V Leiden", "rsids": ["rs6025"], "proxy": None, "bucket": "missing"},
+        {"label": "Prothrombin G20210A", "rsids": ["rs1799963"], "proxy": None, "bucket": "missing"},
+        {"label": "Sickle cell (HbS)", "rsids": ["rs334"], "proxy": None, "bucket": "missing"},
+        {
+            "label": "CFTR F508del",
+            "rsids": ["rs113993960"],
+            "proxy": "Indel; not reliably called on arrays.",
+            "bucket": "expected",
+        },
+        {"label": "SERPINA1 Pi*Z", "rsids": ["rs28929474"], "proxy": None, "bucket": "missing"},
+        {"label": "SERPINA1 Pi*S", "rsids": ["rs17580"], "proxy": None, "bucket": "missing"},
+        {"label": "G6PD c.202G>A", "rsids": ["rs1050828"], "proxy": None, "bucket": "missing"},
+        {"label": "G6PD c.376A>G", "rsids": ["rs1050829"], "proxy": None, "bucket": "missing"},
+        {"label": "APOB R3500Q", "rsids": ["rs5742904"], "proxy": None, "bucket": "missing"},
+        {
+            "label": "BRCA1 5382insC",
+            "rsids": ["rs80357906"],
+            "proxy": "Indel; not reliably called on arrays.",
+            "bucket": "expected",
+        },
+        {
+            "label": "BRCA2 6174delT",
+            "rsids": ["rs80359550"],
+            "proxy": "Indel; not reliably called on arrays.",
+            "bucket": "expected",
+        },
+        {"label": "APC I1307K", "rsids": ["rs1801155"], "proxy": None, "bucket": "missing"},
+        {"label": "CHEK2 I157T", "rsids": ["rs17879961"], "proxy": None, "bucket": "missing"},
     ]
-    notes: list[str] = []
+    expected_notes: list[str] = []
+    missing_notes: list[str] = []
+
+    def _append_note(bucket: str, note: str) -> None:
+        if bucket == "expected":
+            expected_notes.append(note)
+        else:
+            missing_notes.append(note)
+
     for entry in critical:
         rsids = entry["rsids"]
+        bucket = entry.get("bucket", "missing")
         present = [rsid for rsid in rsids if rsid in genotypes]
         non_snp_present = {
             rsid: non_snp_genotypes[rsid]
@@ -1284,7 +1794,23 @@ def _coverage_notes(
         ]
 
         if not present and not non_snp_present:
-            notes.append(f"Not assessed: {entry['label']} (missing {', '.join(missing)})")
+            if bucket == "expected":
+                proxy_note = entry.get("proxy")
+                if proxy_note and "not reliably" in proxy_note.lower():
+                    note = f"Not assessed: {entry['label']} - {proxy_note}"
+                else:
+                    note = (
+                        f"Not assessed: {entry['label']} - expected limitation for SNP arrays."
+                    )
+            else:
+                if entry["label"] == "HLA-B*58:01 (allopurinol)":
+                    note = (
+                        "Not assessed: HLA-B*58:01 (allopurinol) "
+                        "(missing rs9263726 proxy SNP in this file build)"
+                    )
+                else:
+                    note = f"Not assessed: {entry['label']} (missing {', '.join(missing)})"
+            _append_note(bucket, note)
             continue
 
         if present:
@@ -1300,16 +1826,20 @@ def _coverage_notes(
                 note = f"Partial coverage: {entry['label']} ({'; '.join(parts)})."
                 if entry["proxy"]:
                     note = f"{note} {entry['proxy']}"
-                notes.append(note)
+                _append_note(bucket, note)
                 continue
-            if entry["proxy"]:
-                notes.append(f"Note: {entry['label']} - {entry['proxy']}")
+            if entry["proxy"] and entry.get("note_when_present", True):
+                _append_note(bucket, f"Note: {entry['label']} - {entry['proxy']}")
             continue
 
         if non_snp_present and not missing:
             calls = ", ".join(f"{rsid}={call}" for rsid, call in non_snp_present.items())
-            notes.append(
-                f"Non-SNP call present: {entry['label']} ({calls}). Indel/repeat not interpreted."
+            _append_note(
+                bucket,
+                "Non-SNP call present: "
+                f"{entry['label']} ({calls}). "
+                "Present in raw file as placeholder; cannot be interpreted from SNP array; "
+                "treat as not assessed."
             )
             continue
         if non_snp_present and missing:
@@ -1320,8 +1850,15 @@ def _coverage_notes(
             )
             if entry["proxy"]:
                 note = f"{note} {entry['proxy']}"
-            notes.append(note)
-    return notes
+            _append_note(bucket, note)
+
+    expected_notes.append(
+        "Not assessed: Malignant hyperthermia (RYR1/CACNA1S) - variant spectrum not reliably callable on SNP arrays."
+    )
+    expected_notes.append(
+        "Not assessed: Aminoglycoside ototoxicity (MT-RNR1 m.1555A>G) - mitochondrial variants not reliably callable on SNP arrays."
+    )
+    return expected_notes, missing_notes
 
 
 def _non_snp_verification_notes(
@@ -1376,6 +1913,7 @@ def _apply_estrogen_notes(
 def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
     profile = _nat2_profile(genotypes)
     status_key = profile["status"]
+    observed_snps = ", ".join(f"{rsid} {genotypes.get(rsid, 'Not Found')}" for rsid in _NAT2_ORDER)
     if status_key == "unknown":
         return {
             "label": "NAT2 acetylation status",
@@ -1383,7 +1921,8 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
             "sub": "NAT2 rs1801280/rs1799930/rs1799931",
             "value": "Unknown",
             "detail": (
-                "Incomplete NAT2 markers; phenotype cannot be inferred from this partial panel."
+                "Incomplete NAT2 markers; phenotype cannot be inferred from this partial panel. "
+                f"Observed SNPs: {observed_snps}."
             ),
             "emoji": _wellness_emoji("detox"),
             "indicator": "Not assessed",
@@ -1398,7 +1937,8 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
             "Based on three NAT2 tag SNPs; full haplotyping is needed for a clinical "
             "phenotype. Slow acetylator status may affect isoniazid, hydralazine, "
             "sulfasalazine dosing and can modulate toxin/carcinogen handling "
-            "(e.g., smoking-related risk). Confirm clinically before medication changes."
+            "(e.g., smoking-related risk). Confirm clinically before medication changes. "
+            f"Observed SNPs: {observed_snps}."
         )
         indicator = "Likely slow (partial panel)"
     elif status_key == "indeterminate":
@@ -1406,7 +1946,7 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
         status = "neutral"
         detail = (
             "One slow allele detected; NAT2 acetylator status is indeterminate without "
-            "full haplotyping. Confirm clinically if medication is relevant."
+            f"full haplotyping. Confirm clinically if medication is relevant. Observed SNPs: {observed_snps}."
         )
         indicator = "Indeterminate"
     else:
@@ -1414,7 +1954,7 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
         status = "protective"
         detail = (
             "No slow alleles detected across the partial panel; full NAT2 haplotyping "
-            "is required for definitive phenotype."
+            f"is required for definitive phenotype. Observed SNPs: {observed_snps}."
         )
         indicator = "No slow alleles (partial panel)"
     return {
@@ -1434,7 +1974,7 @@ def _nat2_status(genotypes: dict[str, str]) -> dict[str, str | None]:
 def _wellness_tables(
     genotypes: dict[str, str],
     non_snp_genotypes: dict[str, str] | None,
-    apoe: str,
+    apoe_assessment: dict[str, Any],
     expanded: dict[str, Any],
     summary: dict[str, Any],
     variant_lookup: dict[str, dict[str, Any]] | None,
@@ -1529,12 +2069,25 @@ def _wellness_tables(
             "value": "Balanced",
             "emoji": _wellness_emoji("Stress Response"),
         })
-    if apoe != "Unknown":
+    if apoe_assessment.get("assessed"):
+        haplotype = str(apoe_assessment.get("haplotype") or "Unknown")
+        apoe_genotypes = apoe_assessment.get("genotypes", {})
+        rs429358 = apoe_genotypes.get("rs429358", "NA")
+        rs7412 = apoe_genotypes.get("rs7412", "NA")
         fit_rows.append({
             "label": "Alzheimer's APOE",
-            "status": "low",
-            "sub": f"{apoe}",
-            "value": "Neutral",
+            "status": "low" if haplotype == "e3/e3" else "neutral",
+            "sub": f"rs429358 {rs429358} + rs7412 {rs7412} -> {haplotype}",
+            "value": "Neutral" if haplotype == "e3/e3" else "Genotype context marker",
+            "emoji": _wellness_emoji("Alzheimer's APOE"),
+        })
+    else:
+        fit_rows.append({
+            "label": "Alzheimer's APOE",
+            "status": "missing",
+            "sub": "rs429358/rs7412",
+            "value": "APOE not assessed (partial/missing SNPs)",
+            "detail": str(apoe_assessment.get("reason") or "").strip(),
             "emoji": _wellness_emoji("Alzheimer's APOE"),
         })
 
@@ -1557,6 +2110,8 @@ def _wellness_tables(
         "Functional Health - Iron Metabolism",
     ):
         entries = panels.get(panel_name, [])
+        if panel_name == "Functional Health - Detox/Acetylation":
+            entries = [entry for entry in entries if entry.get("rsid") not in _NAT2_RSIDS]
         summary_row = _panel_summary_row(panel_name, entries, genotypes, non_snp_genotypes, variant_lookup)
         if summary_row:
             functional_rows.append(summary_row)
@@ -1656,21 +2211,24 @@ def _expanded_panels(
             label = entry.get("label")
             genotype = genotypes.get(rsid)
             non_snp_call = non_snp_genotypes.get(rsid)
+            flags = _variant_flags(
+                rsid,
+                genotype,
+                non_snp_call,
+                variant_lookup,
+                is_partial_panel=rsid in partial_rsids,
+            )
             if genotype:
                 genotype_display = genotype
-            elif non_snp_call:
+            elif flags["is_non_snp_placeholder"]:
                 genotype_display = f"{non_snp_call} (non-SNP call)"
             else:
                 genotype_display = "Not Found"
-            proxy_note = None
-            if genotype and variant_lookup and rsid in variant_lookup:
-                match_status = variant_lookup[rsid].get("match_status")
-                proxy_note = variant_lookup[rsid].get("proxy_note")
-                if match_status in {"reverse_complement", "mismatch"}:
-                    genotype_display = "Not interpreted (strand caution)"
-            if rsid in partial_rsids:
+            if flags["is_strand_caution"]:
+                genotype_display = "Not interpreted (strand caution)"
+            if flags["is_partial_panel"]:
                 genotype_display = f"{genotype_display} (partial coverage)"
-            if proxy_note:
+            if flags["is_proxy"]:
                 genotype_display = f"{genotype_display} (proxy marker)"
             items.append(f"{label} ({rsid}): {genotype_display}")
         panels_out.append({"name": panel_name, "items": items})
@@ -1811,12 +2369,174 @@ def _trials_by_finding(trials: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _trial_url(study: dict[str, Any]) -> str | None:
+    raw_url = str(study.get("url") or "").strip()
+    if raw_url.startswith(("http://", "https://")):
+        return raw_url
+    nct_id = str(study.get("nct_id") or "").strip()
+    if nct_id.upper().startswith("NCT"):
+        return f"https://clinicaltrials.gov/study/{nct_id}"
+    return None
+
+
 def _should_include_trials(
     risk_cards: list[dict[str, str]],
     trials_by_finding: list[dict[str, Any]],
 ) -> bool:
     clinical_cards = [card for card in risk_cards if card.get("category") == "clinical"]
     return bool(clinical_cards) and bool(trials_by_finding)
+
+
+def _actionable_not_available(
+    genotypes: dict[str, str],
+    non_snp_genotypes: dict[str, str] | None,
+) -> list[dict[str, str]]:
+    non_snp_genotypes = non_snp_genotypes or {}
+    candidates = [
+        {
+            "label": "CYP2C19*2 (clopidogrel)",
+            "rsids": ["rs4244285"],
+            "reason": "Not available in this file build (missing rs4244285).",
+            "next": "Use clinical PGx testing before clopidogrel treatment decisions.",
+        },
+        {
+            "label": "CYP2C19*17",
+            "rsids": ["rs12248560"],
+            "reason": "Not available in this file build (missing rs12248560).",
+            "next": "Use clinical PGx testing when CYP2C19 phenotype is medication-relevant.",
+        },
+        {
+            "label": "VKORC1 (warfarin sensitivity)",
+            "rsids": ["rs9923231"],
+            "reason": "Not available in this file build (missing rs9923231).",
+            "next": "Use clinical PGx testing for complete warfarin dosing guidance.",
+        },
+        {
+            "label": "HLA-B*58:01 proxy (allopurinol)",
+            "rsids": ["rs9263726"],
+            "reason": "Not available in this file build (missing rs9263726 proxy SNP).",
+            "next": "If allopurinol is relevant, order clinical HLA-B*58:01 typing.",
+        },
+        {
+            "label": "Sickle cell (HbS)",
+            "rsids": ["rs334"],
+            "reason": "Not available in this file build (missing rs334).",
+            "next": "If clinically relevant, confirm with clinical hemoglobin testing.",
+        },
+    ]
+    missing_items: list[dict[str, str]] = []
+    for item in candidates:
+        rsids = item["rsids"]
+        has_any_call = any(rsid in genotypes or rsid in non_snp_genotypes for rsid in rsids)
+        if has_any_call:
+            continue
+        missing_items.append(
+            {
+                "label": item["label"],
+                "reason": item["reason"],
+                "next": item["next"],
+            }
+        )
+    return missing_items
+
+
+def _functional_groups(functional_rows: list[dict[str, str | None]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for row in functional_rows:
+        label = str(row.get("label") or "")
+        is_summary = str(row.get("row_type") or "") == "summary" or label.endswith(" summary")
+        if is_summary:
+            if current is not None:
+                groups.append(current)
+            current = {"summary": row, "children": []}
+            continue
+        if current is not None:
+            current["children"].append(row)
+    if current is not None:
+        groups.append(current)
+    return groups
+
+
+def _validate_summary_consistency(functional_rows: list[dict[str, str | None]]) -> None:
+    for group in _functional_groups(functional_rows):
+        summary = group["summary"]
+        children = group["children"]
+        summary_label = str(summary.get("label") or "")
+        summary_value = str(summary.get("value") or "").lower()
+        if (
+            "no high-confidence adverse flags detected in this screened set" not in summary_value
+            and "no risk markers detected" not in summary_value
+        ):
+            continue
+        for child in children:
+            child_label = str(child.get("label") or "")
+            child_status = str(child.get("status") or "").lower()
+            child_value = str(child.get("value") or "").lower()
+            flagged = (
+                child_status in {"risk", "missing"}
+                or "risk allele present" in child_value
+                or "incomplete" in child_value
+                or "not assessed" in child_value
+            )
+            if flagged:
+                raise ValueError(
+                    "Validation failed: summary-child mismatch in functional section. "
+                    f"Summary '{summary_label}' says no risk, but child '{child_label}' is flagged."
+                )
+
+
+def _validate_warfarin_disclaimer(risk_cards: list[dict[str, str]]) -> None:
+    for card in risk_cards:
+        label = str(card.get("label") or "")
+        description = str(card.get("description") or "")
+        action = str(card.get("action") or "")
+        combined = f"{label} {description} {action}".lower()
+        if "warfarin" not in combined:
+            continue
+        if "warfarin panel status:" not in combined or "vkorc1" not in combined:
+            raise ValueError(
+                "Validation failed: warfarin-related item missing explicit VKORC1 panel status."
+            )
+        if ("present" not in combined) and ("missing" not in combined):
+            raise ValueError(
+                "Validation failed: warfarin-related item missing explicit present/missing wording."
+            )
+
+
+def _validate_missing_rollup(
+    functional_rows: list[dict[str, str | None]],
+    *,
+    allowlist: set[str] | None = None,
+) -> None:
+    allowed = allowlist or set()
+    for group in _functional_groups(functional_rows):
+        summary = group["summary"]
+        children = group["children"]
+        detail = str(summary.get("detail") or "")
+        for child in children:
+            value = str(child.get("value") or "").lower()
+            sub = str(child.get("sub") or "")
+            if "not assessed" not in value or "not found" not in sub.lower():
+                continue
+            rsid = sub.split()[0] if sub.split() else ""
+            if not rsid or rsid in allowed:
+                continue
+            if rsid not in detail:
+                raise ValueError(
+                    "Validation failed: missing marker not included in section rollup. "
+                    f"rsid={rsid}, summary={summary.get('label')}"
+                )
+
+
+def _validate_report_lints(
+    risk_cards: list[dict[str, str]],
+    wellness: dict[str, list[dict[str, str | None]]],
+) -> None:
+    functional_rows = wellness.get("functional", [])
+    _validate_summary_consistency(functional_rows)
+    _validate_warfarin_disclaimer(risk_cards)
+    _validate_missing_rollup(functional_rows)
 
 
 def _render_html(
@@ -1830,10 +2550,13 @@ def _render_html(
     fun_cards: list[dict[str, str]],
     trials_by_finding: list[dict[str, Any]],
     demographics_note: str | None,
-    coverage_notes: list[str],
+    coverage_expected: list[str],
+    coverage_missing: list[str],
+    qc_appendix_notes: list[str],
     hidden_screening: list[dict[str, str]],
     proxy_markers: list[dict[str, str]],
     high_priority: list[dict[str, str]],
+    actionable_not_available: list[dict[str, str]],
     *,
     include_trials: bool,
     research_findings: list[dict[str, str]],
@@ -1873,10 +2596,22 @@ def _render_html(
             "</div>"
         )
     if summary.get("ambiguous_snp_count") is not None:
+        ambiguous_count = summary.get("ambiguous_snp_count")
+        ambiguous_pct = summary.get("ambiguous_snp_percent_called")
+        ambiguous_val = str(ambiguous_count)
+        if ambiguous_pct is not None:
+            ambiguous_val = f"{ambiguous_count} ({ambiguous_pct}% of called SNPs)"
         qc_rows.append(
             "<div class=\"data-row\">"
             "<div class=\"data-label\">Ambiguous A/T or C/G SNPs</div>"
-            f"<div class=\"data-val\">{summary.get('ambiguous_snp_count')}</div>"
+            f"<div class=\"data-val\">{ambiguous_val}</div>"
+            "</div>"
+        )
+        qc_rows.append(
+            "<div class=\"data-row sub-row\">"
+            "<div class=\"data-label\">Informational: computed from observed genotype classes (A/T or C/G). "
+            "High values can be normal for array content and are handled via reference-allele verification rules.</div>"
+            "<div class=\"data-val\"></div>"
             "</div>"
         )
     if summary.get("duplicate_rsid_count") is not None:
@@ -1885,11 +2620,21 @@ def _render_html(
             f"<div class=\"data-label\">Duplicate rsIDs</div><div class=\"data-val\">{summary.get('duplicate_rsid_count')}</div>"
             "</div>"
         )
+    if summary.get("reverse_complement_count"):
+        rc_count = int(summary.get("reverse_complement_count") or 0)
+        rc_rsids = summary.get("reverse_complement_rsids") or []
+        rc_text = f" ({', '.join(rc_rsids)})" if rc_rsids else ""
+        qc_rows.append(
+            "<div class=\"data-row\">"
+            "<div class=\"data-label\">Strand caution</div>"
+            f"<div class=\"data-val\">{_count_phrase(rc_count, 'reverse-complement match')}{rc_text}</div>"
+            "</div>"
+        )
     missing_by_chr = summary.get("missing_by_chromosome")
     if isinstance(missing_by_chr, list) and missing_by_chr:
         missing_items = []
         for entry in missing_by_chr:
-            chrom = entry.get("chr_norm", "NA")
+            chrom = _display_chromosome_label(entry.get("chr_norm", "NA"))
             total = entry.get("total", "NA")
             missing = entry.get("missing", "NA")
             missing_items.append(f"{chrom}: {missing}/{total}")
@@ -1963,7 +2708,7 @@ def _render_html(
                 )
         proxy_block = (
             "<div class=\"section-head\">"
-            "<h2>Proxy Marker Limitations</h2>"
+            "<h2>Proxy Marker Screening (Non-diagnostic)</h2>"
             "<div class=\"section-line\"></div>"
             "</div>"
             "<div class=\"dashboard-grid\">"
@@ -1978,13 +2723,35 @@ def _render_html(
             "</div>"
         )
 
-    if coverage_notes:
-        notes = "".join(
-            "<div class=\"data-row\">"
-            f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
-            "</div>"
-            for note in coverage_notes
-        )
+    if coverage_expected or coverage_missing:
+        notes = ""
+        if coverage_expected:
+            notes += (
+                "<div class=\"data-row sub-row\">"
+                "<div class=\"data-label\"><strong>Expected chip limitations</strong> "
+                "(repeats/indels/CNV/HLA typing)</div>"
+                "<div class=\"data-val\"></div>"
+                "</div>"
+            )
+            notes += "".join(
+                "<div class=\"data-row\">"
+                f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
+                "</div>"
+                for note in coverage_expected
+            )
+        if coverage_missing:
+            notes += (
+                "<div class=\"data-row sub-row\">"
+                "<div class=\"data-label\"><strong>Markers usually on arrays but missing in this file build</strong></div>"
+                "<div class=\"data-val\"></div>"
+                "</div>"
+            )
+            notes += "".join(
+                "<div class=\"data-row\">"
+                f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
+                "</div>"
+                for note in coverage_missing
+            )
         coverage_block = (
             "<div class=\"section-head\">"
             "<h2>Coverage Notes</h2>"
@@ -2057,6 +2824,31 @@ def _render_html(
         clinical_block = "\n".join(card_html(card) for card in clinical_cards)
     else:
         clinical_block = "<div class=\"col-full card\">No actionable clinical findings detected.</div>"
+    if actionable_not_available:
+        missing_rows = [
+            "<div class=\"data-row sub-row\">"
+            "<div class=\"data-label\"><strong>Assessed but Not Available in This File</strong></div>"
+            "<div class=\"data-val\"></div>"
+            "</div>"
+        ]
+        for item in actionable_not_available:
+            missing_rows.append(
+                "<div class=\"data-row\">"
+                f"<div class=\"data-label\">{item['label']}</div>"
+                f"<div class=\"data-val\">{item['reason']}</div>"
+                "</div>"
+            )
+            missing_rows.append(
+                "<div class=\"data-row sub-row\">"
+                f"<div class=\"data-label\">Next: {item['next']}</div>"
+                "<div class=\"data-val\"></div>"
+                "</div>"
+            )
+        clinical_block += (
+            "<div class=\"col-full card\">"
+            + "".join(missing_rows) +
+            "</div>"
+        )
 
     high_priority_block = ""
     if high_priority:
@@ -2273,7 +3065,13 @@ def _render_html(
         panel for panel in expanded_panels
         if not panel["name"].startswith("Functional Health - ") and panel["name"] != "Lifestyle"
     ]
-    expanded_block = panels_html(general_panels)
+    expanded_intro = (
+        "<div class=\"data-row sub-row\">"
+        "<div class=\"data-label\">Most loci here are context markers. Pharmacogenomics markers are shown for coverage, and any high-evidence risk calls are promoted above in Actionable Clinical &amp; Pharmacogenomics.</div>"
+        "<div class=\"data-val\"></div>"
+        "</div>"
+    )
+    expanded_block = expanded_intro + panels_html(general_panels)
 
     if include_trials:
         cards = []
@@ -2282,6 +3080,8 @@ def _render_html(
             level = finding.get("finding_level", "unknown")
             query_term = finding.get("query_term", "")
             studies = finding.get("recruiting_studies", [])
+            total_studies = len(studies)
+            shown_studies = studies[:5]
             rows = []
             if not studies:
                 rows.append(
@@ -2291,16 +3091,26 @@ def _render_html(
                     "</div>"
                 )
             else:
-                for study in studies:
+                if total_studies > 5:
+                    rows.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">Showing top 5 of {total_studies} recruiting trials.</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+                for study in shown_studies:
                     trial_id = study.get("nct_id", "N/A")
-                    url = study.get("url", "")
-                    if url:
-                        trial_id = f"<a href=\"{url}\" target=\"_blank\" rel=\"noopener noreferrer\">{trial_id}</a>"
                     title = study.get("title", "N/A")
                     phase = study.get("phase", "N/A")
+                    trial_url = _trial_url(study)
+                    trial_label = str(trial_id)
+                    if trial_url:
+                        trial_label = (
+                            f'<a href="{trial_url}" target="_blank" rel="noopener noreferrer">{trial_id}</a>'
+                        )
                     rows.append(
                         "<div class=\"data-row\">"
-                        f"<div class=\"data-label\">{trial_id}</div>"
+                        f"<div class=\"data-label\">{trial_label}</div>"
                         f"<div class=\"data-val\">{title} ({phase})</div>"
                         "</div>"
                     )
@@ -2332,13 +3142,38 @@ def _render_html(
     else:
         trials_block = ""
 
+    if qc_appendix_notes:
+        qc_rows = "".join(
+            "<div class=\"data-row\">"
+            f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
+            "</div>"
+            for note in qc_appendix_notes
+        )
+        qc_appendix_block = (
+            "<div class=\"section-head\">"
+            "<h2>Developer/QC Appendix</h2>"
+            "<div class=\"section-line\"></div>"
+            "</div>"
+            "<div class=\"dashboard-grid\">"
+            "<div class=\"col-full card\">"
+            "<div class=\"data-row sub-row\">"
+            "<div class=\"data-label\">Pipeline debugging details (non-SNP verification checks).</div>"
+            "<div class=\"data-val\"></div>"
+            "</div>"
+            + qc_rows +
+            "</div>"
+            "</div>"
+        )
+    else:
+        qc_appendix_block = ""
+
     html = html.replace("<!-- Actionable risk cards inserted here -->", clinical_block)
     html = html.replace("<!-- High priority inserted here -->", high_priority_block)
     html = html.replace("<!-- Association risk cards inserted here -->", association_block)
     html = html.replace("<!-- Wellness tables inserted here -->", wellness_block)
     html = html.replace("<!-- Expanded panels inserted here -->", expanded_block)
     html = html.replace("<!-- Fun trait cards inserted here -->", "")
-    html = html.replace("<!-- Trials section inserted here -->", research_block + trials_block)
+    html = html.replace("<!-- Trials section inserted here -->", research_block + trials_block + qc_appendix_block)
 
     return html
 
@@ -2353,10 +3188,13 @@ def _render_markdown(
     fun_cards: list[dict[str, str]],
     trials_by_finding: list[dict[str, Any]],
     variant_verification: list[dict[str, Any]],
-    coverage_notes: list[str],
+    coverage_expected: list[str],
+    coverage_missing: list[str],
+    qc_appendix_notes: list[str],
     hidden_screening: list[dict[str, str]],
     proxy_markers: list[dict[str, str]],
     high_priority: list[dict[str, str]],
+    actionable_not_available: list[dict[str, str]],
     *,
     include_trials: bool,
     research_findings: list[dict[str, str]],
@@ -2382,16 +3220,33 @@ def _render_markdown(
     if summary.get("build_detected"):
         lines.append(f"* **Build Detected:** {summary.get('build_detected')}")
     if summary.get("ambiguous_snp_count") is not None:
-        lines.append(f"* **Ambiguous SNPs (A/T or C/G):** {summary.get('ambiguous_snp_count')}")
+        ambiguous_count = summary.get("ambiguous_snp_count")
+        ambiguous_pct = summary.get("ambiguous_snp_percent_called")
+        if ambiguous_pct is not None:
+            lines.append(f"* **Ambiguous SNPs (A/T or C/G):** {ambiguous_count} ({ambiguous_pct}% of called SNPs)")
+        else:
+            lines.append(f"* **Ambiguous SNPs (A/T or C/G):** {ambiguous_count}")
+        lines.append(
+            "* **Ambiguous SNP note:** Informational; computed from observed genotype classes (A/T or C/G). "
+            "High values can be normal for array content and are handled via reference-allele verification rules."
+        )
     if summary.get("duplicate_rsid_count") is not None:
         dup_examples = summary.get("duplicate_rsid_examples") or []
         example_text = f" Examples: {', '.join(dup_examples)}" if dup_examples else ""
         lines.append(f"* **Duplicate rsIDs:** {summary.get('duplicate_rsid_count')}.{example_text}")
+    if summary.get("reverse_complement_count"):
+        rc_count = int(summary.get("reverse_complement_count") or 0)
+        rc_rsids = summary.get("reverse_complement_rsids") or []
+        rc_text = f" ({', '.join(rc_rsids)})" if rc_rsids else ""
+        lines.append(
+            f"* **Strand caution:** {_count_phrase(rc_count, 'variant')} "
+            f"matched the reverse complement of reference alleles{rc_text}."
+        )
     missing_by_chr = summary.get("missing_by_chromosome")
     if isinstance(missing_by_chr, list) and missing_by_chr:
         missing_items = []
         for entry in missing_by_chr:
-            chrom = entry.get("chr_norm", "NA")
+            chrom = _display_chromosome_label(entry.get("chr_norm", "NA"))
             total = entry.get("total", "NA")
             missing = entry.get("missing", "NA")
             missing_items.append(f"{chrom}: {missing}/{total}")
@@ -2412,6 +3267,12 @@ def _render_markdown(
             lines.append("")
     else:
         lines.append("No actionable clinical findings detected.")
+    if actionable_not_available:
+        lines.append("**Assessed but Not Available in This File**")
+        for item in actionable_not_available:
+            lines.append(f"* {item['label']}: {item['reason']}")
+            lines.append(f"  - Next: {item['next']}")
+        lines.append("")
     lines.append("\n---\n")
 
     lines.append(f"## {section}. High Priority Findings")
@@ -2457,15 +3318,23 @@ def _render_markdown(
                 lines.append(f"  - Note: {row['note']}")
         lines.append("\n---\n")
 
-    if coverage_notes:
+    if coverage_expected or coverage_missing:
         lines.append(f"## {section}. Coverage Notes")
         section += 1
-        for note in coverage_notes:
-            lines.append(f"* {note}")
+        if coverage_expected:
+            lines.append("**Expected chip limitations (repeats/indels/CNV/HLA typing)**")
+            for note in coverage_expected:
+                lines.append(f"* {note}")
+            lines.append("")
+        if coverage_missing:
+            lines.append("**Markers usually on arrays but missing in this file build**")
+            for note in coverage_missing:
+                lines.append(f"* {note}")
+            lines.append("")
         lines.append("\n---\n")
 
     if proxy_markers:
-        lines.append(f"## {section}. Proxy Marker Limitations")
+        lines.append(f"## {section}. Proxy Marker Screening (Non-diagnostic)")
         section += 1
         lines.append(
             "_Proxy markers are population-dependent tags and are not diagnostic. "
@@ -2533,10 +3402,10 @@ def _render_markdown(
     # Sensory/Lifestyle fun traits are surfaced in the Wellness tables above.
     lines.append("\n---\n")
 
-    lines.append(f"## {section}. Expanded Panels (GWAS-Style, Low Effect)")
+    lines.append(f"## {section}. Expanded Panels (Coverage + GWAS Context)")
     section += 1
     lines.append(
-        "_These are common GWAS loci with small effect sizes; genotypes shown are raw allele pairs and do not imply risk unless a known effect allele is present. “Not Found” means the SNP was not in the file or had no call._"
+        "_Most loci here are context markers (often GWAS-scale effects). Pharmacogenomics markers are listed for coverage; high-evidence risk calls are promoted above in Actionable Clinical & Pharmacogenomics. “Not Found” means the SNP was not in the file or had no call._"
     )
     for panel in expanded_panels:
         if panel["name"].startswith("Functional Health - ") or panel["name"] == "Lifestyle":
@@ -2576,27 +3445,35 @@ def _render_markdown(
             if not studies:
                 lines.append("* No recruiting trials found.")
             else:
-                for study in studies:
+                if len(studies) > 5:
+                    lines.append(f"* Showing top 5 of {len(studies)} recruiting trials.")
+                for study in studies[:5]:
                     nct_id = study.get("nct_id", "N/A")
                     title = study.get("title", "N/A")
                     phase = study.get("phase", "N/A")
-                    url = study.get("url", "")
-                    if url:
-                        lines.append(f"* **{nct_id}**: {title} ({phase}) - {url}")
+                    trial_url = _trial_url(study)
+                    if trial_url:
+                        lines.append(f"* [**{nct_id}**]({trial_url}): {title} ({phase})")
                     else:
                         lines.append(f"* **{nct_id}**: {title} ({phase})")
-            lines.append("")
+        lines.append("")
         lines.append("\n---\n")
 
     lines.append(f"## {section}. Limitations & Disclaimer")
+    section += 1
     lines.append("* **CYP2D6:** Status cannot be accurately determined from microarray data due to Copy Number Variation limitations.")
+    lines.append("* **CYP2D6 actionability:** If opioids, SSRIs, tricyclics, or tamoxifen are relevant, consider clinical PGx testing.")
     lines.append("* **GSTM1/GSTT1:** Null genotypes are copy-number deletions and cannot be inferred from SNP array data; dedicated CNV testing is required.")
     lines.append("* **Indels/repeats:** Certain variants (e.g., CFTR F508del, BRCA founders, UGT1A1*28) are indels or repeats and may not be callable from array data.")
     lines.append("* **Screening-level only:** Microarray does not capture rare variants or structural changes.")
     lines.append("* **Pharmacogenomics:** Array-based PGx findings are screening-level only; confirm with clinical-grade testing before medication changes.")
     if summary.get("reverse_complement_count"):
+        rc_count = int(summary.get("reverse_complement_count") or 0)
+        rc_rsids = summary.get("reverse_complement_rsids") or []
+        rc_text = f" (rsids: {', '.join(rc_rsids)})" if rc_rsids else ""
         lines.append(
-            f"* **Strand caution:** {summary.get('reverse_complement_count')} variants matched the reverse complement of reference alleles."
+            f"* **Strand caution:** {_count_phrase(rc_count, 'variant')} "
+            f"matched the reverse complement of reference alleles{rc_text}."
         )
     hla_entry = next((v for v in variant_verification if v.get("rsid") == "rs4349859"), None)
     if hla_entry and hla_entry.get("note"):
@@ -2605,6 +3482,14 @@ def _render_markdown(
         lines.append("* **HLA-B27 proxy:** Use Step 3 Ensembl verification; pay special attention to rs4349859 if alleles appear reversed.")
     lines.append("* **Not medical advice:** Confirm clinically before making medical decisions.")
     lines.append("")
+
+    if qc_appendix_notes:
+        lines.append(f"## {section}. Developer/QC Appendix")
+        section += 1
+        lines.append("_Pipeline debugging details (non-SNP verification checks)._")
+        for note in qc_appendix_notes:
+            lines.append(f"* {note}")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -2638,30 +3523,49 @@ def main() -> int:
 
     genotypes = _merge_genotypes(core_traits, healthy, hidden, expanded)
     non_snp_genotypes = _merge_non_snp_genotypes(core_traits, healthy, hidden, expanded)
-    apoe = _apoe_haplotype(genotypes, clinical)
-
     variant_verification = _load_json(run_dir / "variant_verification.json")
     variant_lookup = _variant_lookup(variant_verification if isinstance(variant_verification, list) else [])
+    apoe_assessment = _apoe_assessment(genotypes, clinical, variant_lookup)
     normalized_sex = _normalize_sex(summary)
     risk_cards = _build_risk_cards(genotypes, variant_lookup, sex=normalized_sex)
+    risk_cards = _escalate_high_evidence_pgx(risk_cards, genotypes, variant_lookup)
     hidden_screening = _hidden_screening_rows(
         hidden,
         genotypes,
         non_snp_genotypes,
         variant_lookup,
         sex=normalized_sex,
+        qc_sex=summary.get("sex_inference"),
     )
-    wellness = _wellness_tables(genotypes, non_snp_genotypes, apoe, expanded, summary, variant_lookup)
+    wellness = _wellness_tables(
+        genotypes,
+        non_snp_genotypes,
+        apoe_assessment,
+        expanded,
+        summary,
+        variant_lookup,
+    )
     expanded_panels = _expanded_panels(expanded, genotypes, non_snp_genotypes, variant_lookup)
     fun_cards = _fun_cards(expanded, genotypes)
     trials_by_finding = _trials_by_finding(trials)
     include_trials = _should_include_trials(risk_cards, trials_by_finding)
     # variant_verification loaded above for allele orientation checks
-    coverage_notes = _coverage_notes(genotypes, non_snp_genotypes)
-    if isinstance(variant_verification, list):
-        coverage_notes.extend(_non_snp_verification_notes(variant_verification))
+    coverage_expected, coverage_missing = _coverage_notes(genotypes, non_snp_genotypes)
+    qc_appendix_notes = (
+        _non_snp_verification_notes(variant_verification)
+        if isinstance(variant_verification, list)
+        else []
+    )
     proxy_markers = _proxy_markers_present(genotypes, variant_lookup)
-    high_priority = _high_priority_findings(genotypes, non_snp_genotypes, variant_lookup)
+    high_priority = _high_priority_findings(
+        genotypes,
+        non_snp_genotypes,
+        variant_lookup,
+        risk_cards=risk_cards,
+    )
+    actionable_not_available = _actionable_not_available(genotypes, non_snp_genotypes)
+    _validate_hbs_interpretation_guardrail(genotypes, risk_cards, high_priority)
+    _validate_report_lints(risk_cards, wellness)
     demographics_note = _demographics_notice(summary)
 
     template = Path("report_template.html").read_text(encoding="utf-8")
@@ -2676,10 +3580,13 @@ def main() -> int:
         fun_cards,
         trials_by_finding,
         demographics_note,
-        coverage_notes,
+        coverage_expected,
+        coverage_missing,
+        qc_appendix_notes,
         hidden_screening,
         proxy_markers,
         high_priority,
+        actionable_not_available,
         include_trials=include_trials,
         research_findings=research_findings if isinstance(research_findings, list) else [],
     )
@@ -2687,17 +3594,20 @@ def main() -> int:
     markdown = _render_markdown(
         base_name,
         summary,
-        apoe,
+        str(apoe_assessment.get("haplotype") or "Unknown"),
         risk_cards,
         wellness,
         expanded_panels,
         fun_cards,
         trials_by_finding,
         variant_verification if isinstance(variant_verification, list) else [],
-        coverage_notes,
+        coverage_expected,
+        coverage_missing,
+        qc_appendix_notes,
         hidden_screening,
         proxy_markers,
         high_priority,
+        actionable_not_available,
         include_trials=include_trials,
         research_findings=research_findings if isinstance(research_findings, list) else [],
     )

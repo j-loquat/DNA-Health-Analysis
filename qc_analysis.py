@@ -138,6 +138,7 @@ def process_dna_file(input_path: str, output_path: str, base_name: str) -> None:
             missing_or_invalid=pl.col("missing_flag") | pl.col("invalid_flag"),
         )
         ambiguous_count = df.filter(pl.col("ambiguous_flag")).height
+        ambiguous_percent_called = (ambiguous_count / called_count * 100) if called_count else 0.0
 
         print(f"Total SNPs processed: {total_count}")
         print(f"No-calls (0/0): {missing_count}")
@@ -203,6 +204,8 @@ def process_dna_file(input_path: str, output_path: str, base_name: str) -> None:
                 "call_rate_percent": round((called_count) / total_count * 100, 2),
                 "heterozygosity_rate": round(heterozygosity_rate, 4),
                 "ambiguous_snp_count": ambiguous_count,
+                "ambiguous_snp_percent_called": round(ambiguous_percent_called, 2),
+                "ambiguous_snp_metric_basis": "observed_genotype_classes",
                 "missing_by_chromosome": missing_by_chr,
                 "duplicate_rsid_count": duplicate_count,
                 "duplicate_rsid_examples": duplicate_examples,

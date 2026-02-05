@@ -35,12 +35,12 @@ Healthy Aging,rs1805087,MTR A2756G,MTR,G,Reduced homocysteine clearance,Normal h
 Healthy Aging,rs234706,CBS C699T,CBS,T,Upregulated CBS activity,Normal CBS activity,,Methylation
 Healthy Aging,rs2802292,FOXO3 longevity,FOXO3,G,Longevity-associated allele,Typical longevity,,Centenarian studies
 Healthy Aging,rs4880,SOD2 Ala16Val,SOD2,T,Reduced antioxidant activity,Normal antioxidant activity,,Oxidative Stress
-Hidden Actionable Risks,rs4149056,Statin muscle risk,SLCO1B1,,,,,
-Hidden Actionable Risks,rs4244285,Clopidogrel response,CYP2C19,,,,,
+Hidden Actionable Risks,rs4149056,Statin muscle risk,SLCO1B1,C,Increased statin myopathy risk,No increased myopathy risk detected,CPIC statin guideline,
+Hidden Actionable Risks,rs4244285,Clopidogrel response,CYP2C19,A,CYP2C19 no-function allele detected,No CYP2C19*2 allele detected,CPIC CYP2C19 guideline,
 Hidden Actionable Risks,rs1800562,Hemochromatosis C282Y,HFE,A,Iron overload risk (C282Y),Normal iron metabolism,,High clinical priority
 Hidden Actionable Risks,rs1799945,Hemochromatosis H63D,HFE,G,Iron overload risk (H63D),Normal iron metabolism,,Medium clinical priority
-Hidden Actionable Risks,rs6025,Factor V Leiden,F5,,,,,
-Hidden Actionable Risks,rs1799963,Prothrombin G20210A,F2,,,,,
+Hidden Actionable Risks,rs6025,Factor V Leiden,F5,A,Factor V Leiden risk allele detected,No Factor V Leiden allele detected,ClinGen,
+Hidden Actionable Risks,rs1799963,Prothrombin G20210A,F2,A,Prothrombin G20210A risk allele detected,No prothrombin risk allele detected,ClinGen,
 Hidden Actionable Risks,rs1333049,9p21 CAD locus,CDKN2A/B,,,,,
 Hidden Actionable Risks,rs3798220,Lp(a) risk,LPA,,,,,
 Cardiometabolic,rs7903146,Type 2 diabetes (TCF7L2),TCF7L2,,,,,
@@ -63,12 +63,13 @@ Cancer,rs10993994,MSMB prostate risk,MSMB,,,,,
 Pharmacogenomics,rs9923231,VKORC1 warfarin sensitivity,VKORC1,,,,,
 Pharmacogenomics,rs1799853,CYP2C9*2,CYP2C9,,,,,
 Pharmacogenomics,rs1057910,CYP2C9*3,CYP2C9,,,,,
+Pharmacogenomics,rs4244285,CYP2C19*2,CYP2C19,A,No function allele.,Normal function allele.,CPIC CYP2C19 guideline,CPIC
 Pharmacogenomics,rs1800460,TPMT*3B,TPMT,,,,,
 Pharmacogenomics,rs1142345,TPMT*3C,TPMT,,,,,
 Pharmacogenomics,rs116855232,NUDT15,NUDT15,,,,,
 Pharmacogenomics,rs2395029,HLA-B*57:01 proxy,HLA-B,,,,,
 Pharmacogenomics,rs3918290,DPYD*2A,DPYD,,,,,
-Pharmacogenomics,rs67376798,DPYD c.2846A>T,DPYD,A,Decreased function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
+Pharmacogenomics,rs67376798,DPYD c.2846A>T,DPYD,T,Decreased function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs55886062,DPYD c.1679T>G,DPYD,G,No function allele.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs56038477,DPYD c.1236G>A (HapB3 tag),DPYD,A,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
 Pharmacogenomics,rs75017182,DPYD c.1129-5923C>G (HapB3),DPYD,G,Decreased function haplotype marker.,Normal function allele.,CPIC fluoropyrimidine guideline,CPIC
@@ -145,6 +146,7 @@ Pharmacogenomics,rs9332131,CYP2C9*6,CYP2C9,,,,NCBI Bookshelf CYP2C9 allele table
 Pharmacogenomics,rs7900194,CYP2C9*8,CYP2C9,A,Reduced function allele.,Normal function allele.,NCBI Bookshelf CYP2C9 allele table,Ancestry-enriched; use with CPIC guidance.
 Pharmacogenomics,rs28371685,CYP2C9*11,CYP2C9,T,Reduced function allele.,Normal function allele.,NCBI Bookshelf CYP2C9 allele table,Ancestry-enriched; use with CPIC guidance.
 Pharmacogenomics,rs2231142,ABCG2 Q141K,ABCG2,A,Reduced transporter function allele.,Normal function allele.,ABCG2 c.421C>A literature,Statin exposure modifier; use with CPIC guidance where available.
+Pharmacogenomics,rs4149056,SLCO1B1 521T>C (statin myopathy),SLCO1B1,C,Increased simvastatin myopathy risk,Normal myopathy risk,CPIC statin guideline,
 Pharmacogenomics,rs2306283,SLCO1B1 388A>G,SLCO1B1,,,,,Haplotype support for SLCO1B1; interpret with rs4149056.
 Pharmacogenomics,rs1800462,TPMT*2,TPMT,C,Reduced TPMT function allele.,Normal function allele.,NCBI Bookshelf TPMT allele table,Thiopurine dosing requires clinical confirmation.
 Pharmacogenomics,rs887829,UGT1A1*28 proxy,UGT1A1,T,Reduced UGT1A1 expression; higher bilirubin risk,Normal UGT1A1 expression,UGT1A1 rs887829 literature,Proxy for UGT1A1*28; interpret with caution.
