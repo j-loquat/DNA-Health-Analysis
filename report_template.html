@@ -153,11 +153,94 @@
         }
         .section-head h2 { font-size: 1.75rem; color: var(--text-main); }
         .section-line { flex-grow: 1; height: 1px; background: #e2e8f0; }
+        .section-collapsible > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .section-collapsible > summary::-webkit-details-marker { display: none; }
+        .section-collapsible .collapse-hint {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            padding-left: 10px;
+        }
+        .section-collapsible .collapse-hint::before { content: "Show"; }
+        .section-collapsible[open] .collapse-hint::before { content: "Hide"; }
+        .card-collapsible > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .card-collapsible > summary::-webkit-details-marker { display: none; }
+        .card-collapsible .collapse-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            padding-left: 10px;
+        }
+        .card-collapsible .collapse-hint::before { content: "Show"; }
+        .card-collapsible[open] .collapse-hint::before { content: "Hide"; }
+        .card-collapsible .card-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .card-collapsible[open] .card-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .section-intro {
+            margin: -12px 0 20px;
+            font-size: 1.02rem;
+            line-height: 1.7;
+            color: var(--text-main);
+            font-weight: 500;
+            max-width: 1040px;
+        }
+        .section-subhead {
+            margin: 12px 0 8px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .coverage-row .data-label {
+            padding-left: 18px;
+            color: var(--text-muted);
+        }
 
         .fun-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
         .sub-row .data-label { padding-left: 28px; color: var(--text-muted); font-size: 0.9rem; }
         .panel-lines { display: grid; gap: 4px; color: var(--text-muted); font-size: 0.9rem; white-space: nowrap; }
         .panel-lines { overflow-x: auto; }
+        .card-prose { color: var(--text-main); line-height: 1.7; }
+        .card-source { margin-top: 10px; color: var(--text-muted); font-size: 0.9rem; font-style: italic; }
+        .inline-details-wrap {
+            display: block;
+            margin-top: 8px;
+            margin-left: 6px;
+            padding-left: 10px;
+            border-left: 2px solid #e2e8f0;
+            text-align: left;
+        }
+        .inline-details {
+            display: block;
+        }
+        .inline-details > summary {
+            list-style: none;
+            cursor: pointer;
+            color: var(--primary-dark);
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+        .inline-details > summary::-webkit-details-marker { display: none; }
+        .inline-details > summary::before { content: "▶ "; }
+        .inline-details[open] > summary::before { content: "▼ "; }
+        .inline-detail-item {
+            margin-top: 6px;
+            color: var(--text-muted);
+            font-size: 0.86rem;
+            line-height: 1.5;
+        }
         .fun-columns {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -258,7 +341,7 @@
             <h2>Expanded Panels</h2>
             <div class="section-line"></div>
         </div>
-        <p class="fun-desc">These are common GWAS loci with small effect sizes; genotypes shown are raw allele pairs and do not imply risk unless a known effect allele is present. “Not Found” means the SNP was not in the file or had no call.</p>
+        <!-- Expanded panels intro inserted here -->
         <div class="dashboard-grid">
             <div class="col-full card">
                 <!-- Expanded panels inserted here -->

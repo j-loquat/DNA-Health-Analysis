@@ -2566,6 +2566,32 @@ def _render_html(
     html = html.replace("[call_rate]", call_rate)
     html = html.replace("[demographics_note]", demographics_note or "")
 
+    def section_intro(text: str) -> str:
+        return f"<p class=\"section-intro\">{text}</p>"
+
+    def collapsible_section(
+        title: str,
+        body_html: str,
+        *,
+        intro_text: str | None = None,
+        open_default: bool = False,
+    ) -> str:
+        intro_html = section_intro(intro_text) if intro_text else ""
+        open_attr = " open" if open_default else ""
+        return (
+            f"<details class=\"section-collapsible\"{open_attr}>"
+            "<summary>"
+            "<div class=\"section-head\">"
+            f"<h2>{title}</h2>"
+            "<div class=\"section-line\"></div>"
+            "<span class=\"collapse-hint\" aria-hidden=\"true\"></span>"
+            "</div>"
+            "</summary>"
+            f"{intro_html}"
+            f"{body_html}"
+            "</details>"
+        )
+
     qc_rows = []
     qc_rows.append(
         "<div class=\"data-row\">"
@@ -2647,12 +2673,7 @@ def _render_html(
     html = html.replace("<!-- QC summary inserted here -->", "".join(qc_rows))
 
     if hidden_screening:
-        rows = [
-            "<div class=\"data-row sub-row\">"
-            "<div class=\"data-label\">Screening only; absence is not diagnostic. Non-SNP calls are listed as not assessed.</div>"
-            "<div class=\"data-val\"></div>"
-            "</div>"
-        ]
+        rows = []
         for row in hidden_screening:
             status = row.get("status", "protective")
             rows.append(
@@ -2672,15 +2693,22 @@ def _render_html(
                     "</div>"
                 )
         hidden_block = (
-            "<div class=\"section-head\">"
-            "<h2>Hidden Actionable Risks (Screening)</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
-            "<div class=\"dashboard-grid\">"
-            "<div class=\"col-full card\">"
-            + "".join(rows) +
-            "</div>"
-            "</div>"
+            collapsible_section(
+                "Hidden Actionable Risks (Screening)",
+                "<div class=\"dashboard-grid\">"
+                "<div class=\"col-full card\">"
+                + "".join(rows) +
+                "</div>"
+                "</div>",
+                intro_text=(
+                    "Screening panel only. Absence of a risk allele is not diagnostic, "
+                    "and non-SNP calls are treated as not assessed."
+                ),
+                open_default=any(
+                    str(row.get("status", "protective")) not in {"protective", "missing"}
+                    for row in hidden_screening
+                ),
+            )
         )
     else:
         hidden_block = ""
@@ -2707,61 +2735,54 @@ def _render_html(
                     "</div>"
                 )
         proxy_block = (
-            "<div class=\"section-head\">"
-            "<h2>Proxy Marker Screening (Non-diagnostic)</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
-            "<div class=\"dashboard-grid\">"
-            "<div class=\"col-full card\">"
-            "<div class=\"data-row sub-row\">"
-            "<div class=\"data-label\">Proxy markers are population-dependent tags and are not diagnostic. "
-            "Confirm with clinical testing.</div>"
-            "<div class=\"data-val\"></div>"
-            "</div>"
-            + "".join(proxy_rows) +
-            "</div>"
-            "</div>"
+            collapsible_section(
+                "Proxy Marker Screening (Non-diagnostic)",
+                "<div class=\"dashboard-grid\">"
+                "<div class=\"col-full card\">"
+                + "".join(proxy_rows) +
+                "</div>"
+                "</div>",
+                intro_text=(
+                    "Proxy markers are ancestry-dependent tags and are not diagnostic. "
+                    "Confirm clinically before care decisions."
+                ),
+                open_default=False,
+            )
         )
 
     if coverage_expected or coverage_missing:
         notes = ""
         if coverage_expected:
             notes += (
-                "<div class=\"data-row sub-row\">"
-                "<div class=\"data-label\"><strong>Expected chip limitations</strong> "
-                "(repeats/indels/CNV/HLA typing)</div>"
-                "<div class=\"data-val\"></div>"
-                "</div>"
+                "<div class=\"section-subhead\">Expected chip limitations (repeats/indels/CNV/HLA typing)</div>"
             )
             notes += "".join(
-                "<div class=\"data-row\">"
+                "<div class=\"data-row coverage-row\">"
                 f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
                 "</div>"
                 for note in coverage_expected
             )
         if coverage_missing:
             notes += (
-                "<div class=\"data-row sub-row\">"
-                "<div class=\"data-label\"><strong>Markers usually on arrays but missing in this file build</strong></div>"
-                "<div class=\"data-val\"></div>"
-                "</div>"
+                "<div class=\"section-subhead\">Markers usually on arrays but missing in this file build</div>"
             )
             notes += "".join(
-                "<div class=\"data-row\">"
+                "<div class=\"data-row coverage-row\">"
                 f"<div class=\"data-label\">{note}</div><div class=\"data-val\"></div>"
                 "</div>"
                 for note in coverage_missing
             )
         coverage_block = (
-            "<div class=\"section-head\">"
-            "<h2>Coverage Notes</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
-            "<div class=\"dashboard-grid\">"
-            "<div class=\"col-full card\">"
-            f"{notes}"
-            "</div>"
-            "</div>"
+            collapsible_section(
+                "Coverage Notes",
+                "<div class=\"dashboard-grid\">"
+                "<div class=\"col-full card\">"
+                f"{notes}"
+                "</div>"
+                "</div>",
+                intro_text="Assay limitations and missing-marker coverage gaps that affect interpretation confidence.",
+                open_default=False,
+            )
         )
     else:
         coverage_block = ""
@@ -2777,14 +2798,14 @@ def _render_html(
             topic = item.get("topic", "Research Topic")
             content = item.get("content", "").replace("\n", "<br>")
             source = item.get("source", "")
-            source_html = f"<div class=\"risk-evidence\" style=\"margin-top: 8px; font-style: italic;\">Source: {source}</div>" if source else ""
+            source_html = f"<div class=\"card-source\">Source: {source}</div>" if source else ""
             
             research_cards.append(
                 "<div class=\"col-full card\">"
                 "<div class=\"card-header\">"
                 f"<h3 class=\"card-title\">{topic}</h3>"
                 "</div>"
-                f"<div class=\"data-row sub-row\" style=\"display: block; padding: 12px;\">{content}{source_html}</div>"
+                f"<div class=\"card-prose\">{content}{source_html}</div>"
                 "</div>"
             )
         
@@ -2793,6 +2814,8 @@ def _render_html(
             "<h2>Research Augmentation (2025/2026 Consensus)</h2>"
             "<div class=\"section-line\"></div>"
             "</div>"
+            + section_intro("Targeted literature updates for high-priority findings in this specific profile.")
+            +
             "<div class=\"dashboard-grid\">"
             f"{''.join(research_cards)}"
             "</div>"
@@ -2825,12 +2848,7 @@ def _render_html(
     else:
         clinical_block = "<div class=\"col-full card\">No actionable clinical findings detected.</div>"
     if actionable_not_available:
-        missing_rows = [
-            "<div class=\"data-row sub-row\">"
-            "<div class=\"data-label\"><strong>Assessed but Not Available in This File</strong></div>"
-            "<div class=\"data-val\"></div>"
-            "</div>"
-        ]
+        missing_rows = []
         for item in actionable_not_available:
             missing_rows.append(
                 "<div class=\"data-row\">"
@@ -2842,11 +2860,19 @@ def _render_html(
                 "<div class=\"data-row sub-row\">"
                 f"<div class=\"data-label\">Next: {item['next']}</div>"
                 "<div class=\"data-val\"></div>"
-                "</div>"
-            )
+                    "</div>"
+                )
         clinical_block += (
             "<div class=\"col-full card\">"
+            "<details class=\"card-collapsible\">"
+            "<summary>"
+            "<div class=\"card-header\">"
+            "<h3 class=\"card-title\">Assessed but Not Available in This File</h3>"
+            "<span class=\"collapse-hint\" aria-hidden=\"true\"></span>"
+            "</div>"
+            "</summary>"
             + "".join(missing_rows) +
+            "</details>"
             "</div>"
         )
 
@@ -2856,13 +2882,17 @@ def _render_html(
         for item in high_priority:
             grouped.setdefault(item["category"], []).append(item)
         blocks = []
-        for category, items in grouped.items():
+        high_priority_intro = next(iter(grouped.keys()), "")
+        for idx, (category, items) in enumerate(grouped.items()):
             rows = [
-                "<div class=\"data-row sub-row\">"
-                f"<div class=\"data-label\">{category}</div>"
-                "<div class=\"data-val\"></div>"
-                "</div>"
             ]
+            if idx > 0:
+                rows.append(
+                    "<div class=\"data-row sub-row\">"
+                    f"<div class=\"data-label\">{category}</div>"
+                    "<div class=\"data-val\"></div>"
+                    "</div>"
+                )
             for item in items:
                 rows.append(
                     "<div class=\"data-row\">"
@@ -2879,26 +2909,23 @@ def _render_html(
                         "</div>"
                     )
             blocks.append("".join(rows))
-        high_priority_block = (
-            "<div class=\"section-head\">"
-            "<h2>High Priority Findings</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
+        high_priority_block = collapsible_section(
+            "High Priority Findings",
             "<div class=\"dashboard-grid\">"
             "<div class=\"col-full card\">"
             + "".join(blocks) +
             "</div>"
-            "</div>"
+            "</div>",
+            intro_text=high_priority_intro or None,
+            open_default=False,
         )
     else:
-        high_priority_block = (
-            "<div class=\"section-head\">"
-            "<h2>High Priority Findings</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
+        high_priority_block = collapsible_section(
+            "High Priority Findings",
             "<div class=\"dashboard-grid\">"
             "<div class=\"col-full card\">No high priority findings detected.</div>"
-            "</div>"
+            "</div>",
+            open_default=False,
         )
 
     if association_cards:
@@ -2909,54 +2936,84 @@ def _render_html(
             "in the Wellness &amp; Lifestyle section.</div>"
         )
 
-    def table_card(title: str, rows: list[dict[str, str | None]]) -> str:
+    def table_card(
+        title: str,
+        rows: list[dict[str, str | None]],
+        *,
+        collapse_details: bool = False,
+    ) -> str:
         inner = []
         for row in rows:
             pill = _status_pill(row["status"])
             sub_text = row.get("sub") if row.get("row_type") != "summary" else ""
+            detail_items: list[str] = []
+            if row.get("detail"):
+                detail_items.append(str(row["detail"]))
+            if row.get("indicator"):
+                detail_items.append(f"Indicator: {row['indicator']}")
+            if row.get("evidence"):
+                detail_items.append(f"Evidence: {row['evidence']}")
+            if row.get("tags"):
+                detail_items.append(f"Tags: {row['tags']}")
+            if row.get("next_test"):
+                detail_items.append(f"Best next test: {row['next_test']}")
+            details_html = ""
+            if collapse_details and detail_items:
+                details_html = (
+                    "<div class=\"inline-details-wrap\">"
+                    "<details class=\"inline-details\">"
+                    "<summary>Details</summary>"
+                    + "".join(
+                        f"<div class=\"inline-detail-item\">{item}</div>"
+                        for item in detail_items
+                    )
+                    + "</details>"
+                    "</div>"
+                )
             inner.append(
                 "<div class=\"data-row\">"
-                f"<div class=\"data-label\">{row.get('emoji', '')} {row['label']}</div>"
+                f"<div class=\"data-label\">{row.get('emoji', '')} {row['label']}{details_html}</div>"
                 "<div class=\"data-val\">"
                 f"<span class=\"status-pill {pill}\">{row['value']}</span>"
                 f"<span class=\"data-sub\">{sub_text}</span>"
                 "</div></div>"
             )
-            if row.get("detail"):
-                inner.append(
-                    "<div class=\"data-row sub-row\">"
-                    f"<div class=\"data-label\">{row['detail']}</div>"
-                    "<div class=\"data-val\"></div>"
-                    "</div>"
-                )
-            if row.get("indicator"):
-                inner.append(
-                    "<div class=\"data-row sub-row\">"
-                    f"<div class=\"data-label\">Indicator: {row['indicator']}</div>"
-                    "<div class=\"data-val\"></div>"
-                    "</div>"
-                )
-            if row.get("evidence"):
-                inner.append(
-                    "<div class=\"data-row sub-row\">"
-                    f"<div class=\"data-label\">Evidence: {row['evidence']}</div>"
-                    "<div class=\"data-val\"></div>"
-                    "</div>"
-                )
-            if row.get("tags"):
-                inner.append(
-                    "<div class=\"data-row sub-row\">"
-                    f"<div class=\"data-label\">Tags: {row['tags']}</div>"
-                    "<div class=\"data-val\"></div>"
-                    "</div>"
-                )
-            if row.get("next_test"):
-                inner.append(
-                    "<div class=\"data-row sub-row\">"
-                    f"<div class=\"data-label\">Best next test: {row['next_test']}</div>"
-                    "<div class=\"data-val\"></div>"
-                    "</div>"
-                )
+            if not collapse_details:
+                if row.get("detail"):
+                    inner.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">{row['detail']}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+                if row.get("indicator"):
+                    inner.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">Indicator: {row['indicator']}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+                if row.get("evidence"):
+                    inner.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">Evidence: {row['evidence']}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+                if row.get("tags"):
+                    inner.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">Tags: {row['tags']}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
+                if row.get("next_test"):
+                    inner.append(
+                        "<div class=\"data-row sub-row\">"
+                        f"<div class=\"data-label\">Best next test: {row['next_test']}</div>"
+                        "<div class=\"data-val\"></div>"
+                        "</div>"
+                    )
         return (
             "<div class=\"col-half card\">"
             "<div class=\"card-header\">"
@@ -2964,7 +3021,11 @@ def _render_html(
             "</div>" + "".join(inner) + "</div>"
         )
 
-    functional_table = table_card("Functional Health", wellness.get("functional", []))
+    functional_table = table_card(
+        "Functional Health",
+        wellness.get("functional", []),
+        collapse_details=True,
+    )
     functional_table = functional_table.replace('col-half', 'col-full')
 
     base_wellness = "".join(
@@ -3065,13 +3126,11 @@ def _render_html(
         panel for panel in expanded_panels
         if not panel["name"].startswith("Functional Health - ") and panel["name"] != "Lifestyle"
     ]
-    expanded_intro = (
-        "<div class=\"data-row sub-row\">"
-        "<div class=\"data-label\">Most loci here are context markers. Pharmacogenomics markers are shown for coverage, and any high-evidence risk calls are promoted above in Actionable Clinical &amp; Pharmacogenomics.</div>"
-        "<div class=\"data-val\"></div>"
-        "</div>"
+    expanded_intro = section_intro(
+        "Most loci here are context markers. Pharmacogenomics markers are shown for coverage, "
+        "and any high-evidence risk calls are promoted above in Actionable Clinical &amp; Pharmacogenomics."
     )
-    expanded_block = expanded_intro + panels_html(general_panels)
+    expanded_block = panels_html(general_panels)
 
     if include_trials:
         cards = []
@@ -3149,20 +3208,15 @@ def _render_html(
             "</div>"
             for note in qc_appendix_notes
         )
-        qc_appendix_block = (
-            "<div class=\"section-head\">"
-            "<h2>Developer/QC Appendix</h2>"
-            "<div class=\"section-line\"></div>"
-            "</div>"
+        qc_appendix_block = collapsible_section(
+            "Developer/QC Appendix",
             "<div class=\"dashboard-grid\">"
             "<div class=\"col-full card\">"
-            "<div class=\"data-row sub-row\">"
-            "<div class=\"data-label\">Pipeline debugging details (non-SNP verification checks).</div>"
-            "<div class=\"data-val\"></div>"
-            "</div>"
             + qc_rows +
             "</div>"
-            "</div>"
+            "</div>",
+            intro_text="Pipeline debugging details for non-SNP verification checks.",
+            open_default=False,
         )
     else:
         qc_appendix_block = ""
@@ -3171,6 +3225,7 @@ def _render_html(
     html = html.replace("<!-- High priority inserted here -->", high_priority_block)
     html = html.replace("<!-- Association risk cards inserted here -->", association_block)
     html = html.replace("<!-- Wellness tables inserted here -->", wellness_block)
+    html = html.replace("<!-- Expanded panels intro inserted here -->", expanded_intro)
     html = html.replace("<!-- Expanded panels inserted here -->", expanded_block)
     html = html.replace("<!-- Fun trait cards inserted here -->", "")
     html = html.replace("<!-- Trials section inserted here -->", research_block + trials_block + qc_appendix_block)
