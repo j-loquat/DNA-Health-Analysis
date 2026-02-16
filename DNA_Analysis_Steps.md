@@ -276,6 +276,16 @@ This document captures the exact steps, scripts (you may need to create), and sk
 3.  **Behavior:** If **no critical findings** or **no mapped queries**, no trials file is produced and the report omits the trials section.
 4.  **Skill Used:** `clinicaltrials-database`.
 
+## Step 8b: Variant Annotation (ClinVar + Population Frequency)
+**Goal:** Enrich high-value markers with external metadata (best-effort).
+
+1.  **Script:** `uv run --script annotate_variants.py [filename]`
+2.  **Action:** For a targeted set of clinically relevant markers (for example Hidden Actionable Risks), fetches:
+    * **ClinVar** germline classification + review status (when available)
+    * **gnomAD** population allele frequency (best-effort; may be rate-limited/overloaded)
+3.  **Output:** `runs/YYYYMMDD/[filename]/variant_annotations.json` (referenced by Step 9 report generation).
+4.  **Notes:** This step is optional and should never override the pipeline's "screening-level" guardrails.
+
 ## Step 9: Final Report Generation (Markdown & HTML)
 **Goal:** Synthesize all findings into polished documents.
 

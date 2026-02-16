@@ -25,6 +25,7 @@ SCRIPT_ORDER: list[tuple[str, str, list[str]]] = [
     ("Expanded panels", "additional_panels.py", []),
     ("Research template", "build_research_findings.py", ["--write-empty"]),
     ("Clinical trials", "search_trials_for_findings.py", []),
+    ("Variant annotations", "annotate_variants.py", []),
     ("Report", "generate_report.py", []),
 ]
 

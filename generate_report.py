@@ -62,6 +62,7 @@ _PROXY_LABELS: dict[str, str] = {
     "rs2395029": "HLA-B*57:01 proxy",
     "rs2844682": "HLA-B*15:02 proxy",
     "rs3909184": "HLA-B*15:02 proxy",
+    "rs10484555": "HLA-B*15:02 proxy",
     "rs1061235": "HLA-A*31:01 proxy",
     "rs9263726": "HLA-B*58:01 proxy",
     "rs4349859": "HLA-B27 proxy",
@@ -267,6 +268,39 @@ def _high_priority_findings(
                 "label": label,
                 "sub": str(card.get("description", "")).strip() or "See actionable PGx section.",
                 "note": "Mirrors the actionable PGx section; confirm clinically before medication changes.",
+            }
+        )
+
+    # APOL1 kidney risk alleles are ancestry-dependent and require haplotype/risk-allele counting.
+    # We treat this as screening-level information only.
+    apol1_rs738 = genotypes.get("rs73885319")
+    apol1_rs609 = genotypes.get("rs60910145")
+    apol1_g2 = non_snp_genotypes.get("rs71785313") or ""
+    g1_s342g = _risk_allele_count("rs73885319", apol1_rs738, "G", variant_lookup)
+    g1_i384m = _risk_allele_count("rs60910145", apol1_rs609, "G", variant_lookup)
+    g1_markers_present = g1_s342g > 0 and g1_i384m > 0
+    g2_del_count = apol1_g2.upper().count("D")
+    if g1_markers_present or g2_del_count:
+        sub_bits = []
+        if apol1_rs738:
+            sub_bits.append(f"rs73885319 {apol1_rs738}")
+        if apol1_rs609:
+            sub_bits.append(f"rs60910145 {apol1_rs609}")
+        if apol1_g2:
+            sub_bits.append(f"rs71785313 {apol1_g2}")
+        summary = "; ".join(sub_bits) if sub_bits else "APOL1 markers observed"
+        note = (
+            "APOL1 risk allele marker(s) detected (screening-level). Increased kidney-risk is most associated with "
+            "having two APOL1 risk alleles (G1/G1, G1/G2, or G2/G2), and interpretation is ancestry-dependent. "
+            "Array-based tag SNPs/indels may be incomplete; confirm clinically if kidney disease, transplant/donor "
+            "evaluation, or family history is relevant."
+        )
+        findings.append(
+            {
+                "category": "Kidney risk (screening-level)",
+                "label": "APOL1 risk alleles (G1/G2 markers)",
+                "sub": summary,
+                "note": note,
             }
         )
 
@@ -1446,11 +1480,32 @@ def _panel_rows(
 
         if not genotype:
             if non_snp_call:
-                value = "Not assessed (non-SNP call)"
-                status = "missing"
-                if include_indicators:
-                    indicator = "Non-SNP call"
-                detail = f"Non-SNP call observed: {non_snp_call}. Indel/repeat not interpreted."
+                if rsid == "rs71785313":
+                    d_count = non_snp_call.upper().count("D")
+                    if d_count:
+                        value = "Deletion allele detected (APOL1 G2 marker)"
+                        status = "risk"
+                        if include_indicators:
+                            indicator = "Risk allele present"
+                        detail = (
+                            "APOL1 G2 deletion marker detected (screening-level). "
+                            "Kidney-risk is most associated with two APOL1 risk alleles (G1/G2); confirm clinically."
+                        )
+                    else:
+                        value = "No deletion allele detected (APOL1 G2 marker)"
+                        status = "protective"
+                        if include_indicators:
+                            indicator = "No high-confidence adverse flags"
+                        detail = (
+                            "APOL1 G2 deletion marker not detected at this indel (screening-level). "
+                            "Does not rule out APOL1 risk alleles not captured by the array."
+                        )
+                else:
+                    value = "Not assessed (non-SNP call)"
+                    status = "missing"
+                    if include_indicators:
+                        indicator = "Non-SNP call"
+                    detail = f"Non-SNP call observed: {non_snp_call}. Indel/repeat not interpreted."
             else:
                 value = "Not assessed"
                 status = "missing"
@@ -1549,6 +1604,46 @@ def _panel_rows(
                 indicator = "Strand caution"
         if flags["is_proxy"] and flags["proxy_note"]:
             detail = f"{detail} {flags['proxy_note']}".strip() if detail else flags["proxy_note"]
+
+        lookup_entry = (variant_lookup or {}).get(rsid, {})
+        if isinstance(lookup_entry, dict):
+            clinvar = lookup_entry.get("clinvar")
+            if isinstance(clinvar, dict):
+                description = str(clinvar.get("description") or "").strip()
+                review = str(clinvar.get("review_status") or "").strip()
+                evaluated = str(clinvar.get("last_evaluated") or "").strip()
+                parts = []
+                if description:
+                    parts.append(description)
+                if review:
+                    parts.append(f"review: {review}")
+                if evaluated:
+                    parts.append(f"last eval: {evaluated}")
+                if parts:
+                    clinvar_line = f"ClinVar: {', '.join(parts)}."
+                    detail = f"{detail} {clinvar_line}".strip() if detail else clinvar_line
+
+            gnomad = lookup_entry.get("gnomad")
+            if isinstance(gnomad, dict):
+                variant_id = str(gnomad.get("variant_id") or "").strip()
+                exome_af = gnomad.get("exome_af")
+                genome_af = gnomad.get("genome_af")
+                af_bits = []
+                if isinstance(exome_af, (int, float)):
+                    af_bits.append(f"exome AF {exome_af:.6g}")
+                if isinstance(genome_af, (int, float)):
+                    af_bits.append(f"genome AF {genome_af:.6g}")
+                if af_bits:
+                    prefix = f"gnomAD ({variant_id})" if variant_id else "gnomAD"
+                    gnomad_line = f"{prefix}: {', '.join(af_bits)}."
+                    detail = f"{detail} {gnomad_line}".strip() if detail else gnomad_line
+
+            ensembl_location = str(lookup_entry.get("ensembl_location") or "").strip()
+            ensembl_assembly = str(lookup_entry.get("ensembl_assembly") or "").strip()
+            if (risk_present or flags["is_proxy"] or flags["is_strand_caution"] or isinstance(clinvar, dict)) and ensembl_location:
+                assembly = ensembl_assembly or "GRCh37"
+                loc_line = f"Location: {assembly} {ensembl_location}."
+                detail = f"{detail} {loc_line}".strip() if detail else loc_line
 
         rows.append({
             "label": label,
@@ -3580,6 +3675,16 @@ def main() -> int:
     non_snp_genotypes = _merge_non_snp_genotypes(core_traits, healthy, hidden, expanded)
     variant_verification = _load_json(run_dir / "variant_verification.json")
     variant_lookup = _variant_lookup(variant_verification if isinstance(variant_verification, list) else [])
+    annotations = _load_json(run_dir / "variant_annotations.json")
+    if isinstance(annotations, dict):
+        for rsid, payload in annotations.items():
+            if not isinstance(rsid, str) or not isinstance(payload, dict):
+                continue
+            variant_lookup.setdefault(rsid, {})
+            if isinstance(payload.get("clinvar"), dict):
+                variant_lookup[rsid]["clinvar"] = payload["clinvar"]
+            if isinstance(payload.get("gnomad"), dict):
+                variant_lookup[rsid]["gnomad"] = payload["gnomad"]
     apoe_assessment = _apoe_assessment(genotypes, clinical, variant_lookup)
     normalized_sex = _normalize_sex(summary)
     risk_cards = _build_risk_cards(genotypes, variant_lookup, sex=normalized_sex)

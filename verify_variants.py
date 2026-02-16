@@ -32,6 +32,7 @@ _PROXY_NOTES: dict[str, str] = {
     "rs4349859": "Proxy marker for HLA-B*27.",
     "rs2844682": "Proxy marker for HLA-B*15:02.",
     "rs3909184": "Proxy marker for HLA-B*15:02.",
+    "rs10484555": "Proxy marker for HLA-B*15:02 (tag SNP; population-dependent).",
     "rs1061235": "Proxy marker for HLA-A*31:01.",
     "rs9263726": "Proxy marker for HLA-B*58:01.",
     "rs887829": "Proxy marker for UGT1A1*28.",
@@ -49,6 +50,9 @@ class VariantVerification:
     observed_alleles: str | None
     ensembl_alleles: str | None
     ensembl_strand: int | None
+    ensembl_location: str | None
+    ensembl_assembly: str | None
+    ensembl_ref_allele: str | None
     match_status: str
     gwas_risk_allele: str | None
     note: str | None
@@ -58,6 +62,12 @@ class VariantVerification:
 class EnsemblCacheEntry(TypedDict):
     allele_string: str | None
     strand: int | None
+    location: str | None
+    assembly_name: str | None
+    seq_region_name: str | None
+    start: int | None
+    end: int | None
+    ancestral_allele: str | None
 
 
 class VariantCache(TypedDict):
@@ -156,20 +166,47 @@ def fetch_ensembl_alleles(
 ) -> tuple[str | None, int | None]:
     cached = cache["ensembl"].get(rsid)
     if cached is not None:
-        return cached["allele_string"], cached["strand"]
+        return cached.get("allele_string"), cached.get("strand")
     url = f"{ENSEMBL_GRCH37}/variation/homo_sapiens/{rsid}"
     data = _get_json(session, url)
     if not data:
-        cache["ensembl"][rsid] = {"allele_string": None, "strand": None}
+        cache["ensembl"][rsid] = {
+            "allele_string": None,
+            "strand": None,
+            "location": None,
+            "assembly_name": None,
+            "seq_region_name": None,
+            "start": None,
+            "end": None,
+            "ancestral_allele": None,
+        }
         return None, None
     mappings = data.get("mappings") or []
     if not mappings:
-        cache["ensembl"][rsid] = {"allele_string": None, "strand": None}
+        cache["ensembl"][rsid] = {
+            "allele_string": None,
+            "strand": None,
+            "location": None,
+            "assembly_name": None,
+            "seq_region_name": None,
+            "start": None,
+            "end": None,
+            "ancestral_allele": None,
+        }
         return None, None
     mapping = mappings[0]
     allele_string = mapping.get("allele_string")
     strand = mapping.get("strand")
-    cache["ensembl"][rsid] = {"allele_string": allele_string, "strand": strand}
+    cache["ensembl"][rsid] = {
+        "allele_string": allele_string,
+        "strand": strand,
+        "location": mapping.get("location"),
+        "assembly_name": mapping.get("assembly_name"),
+        "seq_region_name": mapping.get("seq_region_name"),
+        "start": mapping.get("start"),
+        "end": mapping.get("end"),
+        "ancestral_allele": mapping.get("ancestral_allele"),
+    }
     return allele_string, strand
 
 
@@ -249,8 +286,15 @@ def verify_variants(
     session = requests.Session()
     for rsid in rsids:
         proxy_note = _proxy_note(rsid)
+        ensembl_location = None
+        ensembl_assembly = None
+        ensembl_ref_allele = None
         if rsid in non_snp_map:
             allele_string, strand = fetch_ensembl_alleles(session, cache, rsid)
+            ensembl_entry = cache["ensembl"].get(rsid) or {}
+            ensembl_location = ensembl_entry.get("location")
+            ensembl_assembly = ensembl_entry.get("assembly_name")
+            ensembl_ref_allele = ensembl_entry.get("ancestral_allele")
             observed_raw = non_snp_map.get(rsid)
             observed_tokens = _tokenize_variant_string(observed_raw)
             reference_tokens = _tokenize_variant_string(allele_string)
@@ -270,6 +314,9 @@ def verify_variants(
                     observed_alleles=observed_raw,
                     ensembl_alleles=allele_string,
                     ensembl_strand=strand,
+                    ensembl_location=ensembl_location,
+                    ensembl_assembly=ensembl_assembly,
+                    ensembl_ref_allele=ensembl_ref_allele,
                     match_status=match_status,
                     gwas_risk_allele=None,
                     note=note,
@@ -286,6 +333,9 @@ def verify_variants(
                     observed_alleles=None,
                     ensembl_alleles=None,
                     ensembl_strand=None,
+                    ensembl_location=None,
+                    ensembl_assembly=None,
+                    ensembl_ref_allele=None,
                     match_status="missing_in_file",
                     gwas_risk_allele=None,
                     note=None,
@@ -295,6 +345,10 @@ def verify_variants(
             continue
         observed_set = _allele_set_from_string(genotype)
         ensembl_allele_string, strand = fetch_ensembl_alleles(session, cache, rsid)
+        ensembl_entry = cache["ensembl"].get(rsid) or {}
+        ensembl_location = ensembl_entry.get("location")
+        ensembl_assembly = ensembl_entry.get("assembly_name")
+        ensembl_ref_allele = ensembl_entry.get("ancestral_allele")
         ensembl_set = _allele_set_from_string(ensembl_allele_string)
         comp_set = _complement(ensembl_set)
 
@@ -324,6 +378,9 @@ def verify_variants(
                 observed_alleles="".join(sorted(observed_set)) if observed_set else None,
                 ensembl_alleles=ensembl_allele_string,
                 ensembl_strand=strand,
+                ensembl_location=ensembl_location,
+                ensembl_assembly=ensembl_assembly,
+                ensembl_ref_allele=ensembl_ref_allele,
                 match_status=match_status,
                 gwas_risk_allele=gwas_risk,
                 note=note,
@@ -370,7 +427,7 @@ def main() -> int:
         "rs3745274", "rs2279343", "rs4148323",
         "rs2108622", "rs12777823", "rs28371686", "rs9332131", "rs7900194",
         "rs28371685", "rs2231142", "rs2306283", "rs1800462", "rs887829",
-        "rs8175347", "rs2844682", "rs3909184", "rs1061235", "rs9263726",
+        "rs8175347", "rs2844682", "rs3909184", "rs10484555", "rs1061235", "rs9263726",
         "rs16947", "rs1135840", "rs28371725", "rs35742686", "rs5030655",
         "rs334", "rs113993960", "rs28929474", "rs17580", "rs1050828",
         "rs1050829", "rs5742904", "rs80357906", "rs80359550", "rs1801155",
@@ -379,6 +436,7 @@ def main() -> int:
         "rs10156191", "rs2052129", "rs11558538",
         "rs1801280", "rs1799930", "rs1799931",
         "rs3177928", "rs7197", "rs4349859", "rs2234693",
+        "rs58542926", "rs73885319", "rs60910145", "rs71785313",
     ]
 
     run_dir = run_root(base_name)
