@@ -552,6 +552,17 @@ def _risk_allele_present(
     return _risk_allele_count(rsid, genotype, risk_allele, variant_lookup) > 0
 
 
+def _lactase_persistence_present(
+    genotype: str | None,
+    variant_lookup: dict[str, dict[str, Any]] | None,
+) -> bool:
+    if not genotype:
+        return False
+    # rs4988235 is frequently discussed as -13910C>T, but this dataset can surface
+    # the persistence-associated allele as "A" after normalization/verification.
+    return _risk_allele_present("rs4988235", genotype, "A", variant_lookup) or _has_allele(genotype, "T")
+
+
 def _risk_zygosity_label(
     rsid: str,
     genotype: str | None,
@@ -894,7 +905,7 @@ def _build_risk_cards(
         )
 
     abcg2 = genotypes.get("rs2231142")
-    if _has_allele(abcg2, "A"):
+    if _has_allele(abcg2, "T"):
         cards.append(
             _risk_card(
                 "Statin Exposure (ABCG2)",
@@ -2083,12 +2094,12 @@ def _wellness_tables(
 
     met_rows = []
     if lactose:
-        status = "high" if "T" not in lactose else "low"
+        status = "low" if _lactase_persistence_present(lactose, variant_lookup) else "high"
         met_rows.append({
             "label": "Lactose Tolerance",
             "status": status,
             "sub": f"rs4988235 {lactose}",
-            "value": "Intolerant" if status == "high" else "Tolerant",
+            "value": "Likely reduced lactase persistence" if status == "high" else "Likely tolerant/persistent",
             "emoji": _wellness_emoji("Lactose Tolerance"),
         })
     if caffeine:
@@ -2117,13 +2128,17 @@ def _wellness_tables(
             "value": "Taster",
             "emoji": _wellness_emoji("Bitter Taste"),
         })
-    if dq25 and dq8:
+    if dq25 or dq8:
+        dq25_text = dq25 or "Not assessed"
+        dq8_text = dq8 or "Not assessed"
+        value = "Partial tag screen" if not (dq25 and dq8) else "Screening-level tags available"
         met_rows.append({
-            "label": "Celiac Tags",
-            "status": "low",
-            "sub": f"DQ2.5 {dq25} / DQ8 {dq8}",
-            "value": "Low Risk",
+            "label": "Celiac HLA Tags",
+            "status": "neutral",
+            "sub": f"DQ2.5 {dq25_text} / DQ8 {dq8_text}",
+            "value": value,
             "emoji": _wellness_emoji("Celiac Tags"),
+            "detail": "Tag SNPs are screening markers only; use clinical HLA typing if celiac disease is a real concern.",
         })
 
     actn3 = genotypes.get("rs1815739")

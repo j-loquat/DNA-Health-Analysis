@@ -287,6 +287,11 @@ class GenerateReportImprovementsTests(unittest.TestCase):
         self.assertIn("Heart Health", by_label)
         self.assertIn("rs10455872 (AG)", by_label["Heart Health"]["description"])
 
+    def test_abcg2_gt_generates_statin_exposure_card(self) -> None:
+        cards = _build_risk_cards({"rs2231142": "GT"})
+        labels = {card["label"] for card in cards}
+        self.assertIn("Statin Exposure (ABCG2)", labels)
+
     def test_actionable_serpina1_includes_genotype_and_zygosity(self) -> None:
         cards = _build_risk_cards({"rs17580": "TT"})
         alpha1 = next(card for card in cards if card["label"] == "Alpha-1 Antitrypsin Deficiency")
@@ -357,6 +362,32 @@ class GenerateReportImprovementsTests(unittest.TestCase):
         labels = [str(row.get("label")) for row in wellness["functional"]]
         self.assertIn("NAT2 acetylation status", labels)
         self.assertNotIn("NAT2 SNP (partial panel)", labels)
+
+    def test_wellness_lactose_tolerance_uses_persistence_allele(self) -> None:
+        wellness = _wellness_tables(
+            {"rs4988235": "AG"},
+            {},
+            {"assessed": False, "reason": "APOE not assessed (partial/missing SNPs): missing rs429358, rs7412."},
+            {"panels": {}, "fun_panels": {}},
+            {},
+            {"rs4988235": {"match_status": "match", "ensembl_alleles": "G/A/C/T"}},
+        )
+        lactose = next(row for row in wellness["metabolism"] if row.get("label") == "Lactose Tolerance")
+        self.assertEqual(lactose.get("value"), "Likely tolerant/persistent")
+
+    def test_celiac_hla_tags_surface_partial_screen_without_low_risk_claim(self) -> None:
+        wellness = _wellness_tables(
+            {"rs7454108": "TT"},
+            {},
+            {"assessed": False, "reason": "APOE not assessed (partial/missing SNPs): missing rs429358, rs7412."},
+            {"panels": {}, "fun_panels": {}},
+            {},
+            None,
+        )
+        celiac = next(row for row in wellness["metabolism"] if row.get("label") == "Celiac HLA Tags")
+        self.assertEqual(celiac.get("value"), "Partial tag screen")
+        self.assertIn("DQ8 TT", celiac.get("sub", ""))
+        self.assertNotEqual(celiac.get("status"), "low")
 
     def test_report_lints_fail_for_summary_child_mismatch(self) -> None:
         with self.assertRaises(ValueError):
